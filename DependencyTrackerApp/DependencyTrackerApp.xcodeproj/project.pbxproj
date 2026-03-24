@@ -1,0 +1,296 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000001233333330001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002233333330001 /* AppDelegate.swift */; };
+		A1000003233333330001 /* DependencyTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004233333330001 /* DependencyTrackingService.swift */; };
+		A1000005233333330001 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000006233333330001 /* MainWindowController.swift */; };
+		A1000007233333330001 /* TrackerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233333330001 /* TrackerViewModel.swift */; };
+		A1000009233333330001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A233333330001 /* main.swift */; };
+		A100000B233333330001 /* FindingsTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C233333330001 /* FindingsTableView.swift */; };
+		A100000D233333330001 /* DependenciesTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233333330001 /* DependenciesTableView.swift */; };
+		A1000014233333330001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000013233333330001 /* Assets.xcassets */; };
+		A100001A233333333001 /* DependencyTrackerCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1000019233333330001 /* DependencyTrackerCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1000002233333330001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A1000004233333330001 /* DependencyTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyTrackingService.swift; sourceTree = "<group>"; };
+		A1000006233333330001 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
+		A1000008233333330001 /* TrackerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackerViewModel.swift; sourceTree = "<group>"; };
+		A100000A233333330001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A100000C233333330001 /* FindingsTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindingsTableView.swift; sourceTree = "<group>"; };
+		A100000E233333330001 /* DependenciesTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependenciesTableView.swift; sourceTree = "<group>"; };
+		A1000011233333330001 /* DependencyTrackerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DependencyTrackerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000013233333330001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1000010233333330001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A100001A233333333001 /* DependencyTrackerCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1000015233333330001 = {
+			isa = PBXGroup;
+			children = (
+				A1000016233333330001 /* DependencyTrackerApp */,
+				A1000017233333330001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1000016233333330001 /* DependencyTrackerApp */ = {
+			isa = PBXGroup;
+			children = (
+				A1000002233333330001 /* AppDelegate.swift */,
+				A1000004233333330001 /* DependencyTrackingService.swift */,
+				A1000006233333330001 /* MainWindowController.swift */,
+				A1000008233333330001 /* TrackerViewModel.swift */,
+				A100000A233333330001 /* main.swift */,
+				A1000018233333330001 /* Views */,
+				A1000013233333330001 /* Assets.xcassets */,
+			);
+			path = DependencyTrackerApp;
+			sourceTree = "<group>";
+		};
+		A1000017233333330001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1000011233333330001 /* DependencyTrackerApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1000018233333330001 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A100000C233333330001 /* FindingsTableView.swift */,
+				A100000E233333330001 /* DependenciesTableView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1000012233333330001 /* DependencyTrackerApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000023233333330001 /* Build configuration list for PBXNativeTarget "DependencyTrackerApp" */;
+			buildPhases = (
+				A100001F233333333001 /* Sources */,
+				A1000010233333330001 /* Frameworks */,
+				A1000020233333330001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DependencyTrackerApp;
+			packageProductDependencies = (
+				A1000019233333330001 /* DependencyTrackerCore */,
+			);
+			productName = DependencyTrackerApp;
+			productReference = A1000011233333330001 /* DependencyTrackerApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1000021233333330001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					A1000012233333330001 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = A1000022233333330001 /* Build configuration list for PBXProject "DependencyTrackerApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1000015233333330001;
+			packageReferences = (
+				A1000026233333330001 /* XCLocalSwiftPackageReference ".." */,
+			);
+			productRefGroup = A1000017233333330001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1000012233333330001 /* DependencyTrackerApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1000020233333330001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000014233333330001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A100001F233333333001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000001233333330001 /* AppDelegate.swift in Sources */,
+				A1000003233333330001 /* DependencyTrackingService.swift in Sources */,
+				A1000005233333330001 /* MainWindowController.swift in Sources */,
+				A1000007233333330001 /* TrackerViewModel.swift in Sources */,
+				A1000009233333330001 /* main.swift in Sources */,
+				A100000B233333330001 /* FindingsTableView.swift in Sources */,
+				A100000D233333330001 /* DependenciesTableView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1000024233333330001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1000025233333330001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A1000027233333330001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SPMDependencyTracker;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2026.";
+				INFOPLIST_KEY_NSMainNibFile = "";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amrmohamad.SPMDependencyTrackerApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A1000028233333330001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SPMDependencyTracker;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2026.";
+				INFOPLIST_KEY_NSMainNibFile = "";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amrmohamad.SPMDependencyTrackerApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1000022233333330001 /* Build configuration list for PBXProject "DependencyTrackerApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000024233333330001 /* Debug */,
+				A1000025233333330001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000023233333330001 /* Build configuration list for PBXNativeTarget "DependencyTrackerApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000027233333330001 /* Debug */,
+				A1000028233333330001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A1000026233333330001 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1000019233333330001 /* DependencyTrackerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1000026233333330001 /* XCLocalSwiftPackageReference ".." */;
+			productName = DependencyTrackerCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A1000021233333330001 /* Project object */;
+}
