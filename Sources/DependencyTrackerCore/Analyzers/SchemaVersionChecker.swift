@@ -1,8 +1,11 @@
 import Foundation
 
+/// Interprets the schema version stored in `Package.resolved`.
 struct SchemaVersionChecker: Sendable {
+    /// The parser used to extract the schema version from disk.
     private let parser = ResolvedFileParser()
 
+    /// Returns schema metadata that can be rendered directly in findings and reports.
     func check(at url: URL) throws -> SchemaInfo {
         let document = try parser.parseDocument(at: url)
         switch document.version {

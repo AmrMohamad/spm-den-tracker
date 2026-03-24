@@ -1,6 +1,8 @@
 import Foundation
 
+/// Coordinates the full dependency-audit pipeline from path resolution through report assembly.
 public struct TrackerEngine: Sendable {
+    /// The runtime settings that control which audit stages execute.
     public let configuration: TrackerConfiguration
 
     private let locator: XcodeprojLocator
@@ -10,6 +12,7 @@ public struct TrackerEngine: Sendable {
     private let strategyAuditor: RequirementStrategyAuditor
     private let outdatedChecker: OutdatedChecker
 
+    /// Builds an engine with shared helpers derived from the supplied configuration.
     public init(configuration: TrackerConfiguration) {
         let gitClient = GitClient(timeout: configuration.timeout)
         self.configuration = configuration
@@ -21,6 +24,19 @@ public struct TrackerEngine: Sendable {
         self.outdatedChecker = OutdatedChecker(gitClient: gitClient, concurrentFetchLimit: configuration.concurrentFetchLimit)
     }
 
+    /// Runs the full audit pipeline and returns a report suitable for the CLI or app UI.
+    ///
+    /// The method first resolves the user-provided path to the expected `Package.resolved`
+    /// location, then derives the file's git status, parses dependency pins, classifies the
+    /// schema version, audits pinning strategy risk, and optionally performs remote outdated
+    /// checks. Each stage feeds a single `DependencyReport` so callers do not need to manually
+    /// coordinate partial results.
+    ///
+    /// - Parameter projectPath: A project bundle path, containing directory, or direct
+    ///   `Package.resolved` path provided by the user.
+    /// - Returns: A fully assembled dependency report, even when the resolved file is missing.
+    /// - Throws: `DependencyTrackerError` when the path cannot be resolved or the file cannot
+    ///   be parsed, plus any process-level failures surfaced by the support layer.
     public func analyze(projectPath: String) async throws -> DependencyReport {
         let resolvedFileURL = try locateResolvedFile(at: projectPath)
         let fileStatus = try await resolvedFileStatus(for: resolvedFileURL)
@@ -78,30 +94,64 @@ public struct TrackerEngine: Sendable {
         )
     }
 
+    /// Resolves a user-supplied path to the expected `Package.resolved` location.
+    ///
+    /// - Parameter path: A path to a project bundle, containing directory, or lockfile.
+    /// - Returns: The canonical `Package.resolved` URL used by the rest of the engine.
+    /// - Throws: `DependencyTrackerError.invalidPath` or
+    ///   `DependencyTrackerError.ambiguousProjectPath` when the input cannot be mapped safely.
     public func locateResolvedFile(at path: String) throws -> URL {
         try locator.locateResolvedFile(at: path)
     }
 
+    /// Parses the dependencies recorded in a `Package.resolved` file.
+    ///
+    /// - Parameter url: The resolved file URL returned by `locateResolvedFile(at:)`.
+    /// - Returns: Normalized pins that can be consumed by the audit pipeline.
+    /// - Throws: Parsing and schema errors when the file contents are malformed.
     public func parseResolved(at url: URL) throws -> [ResolvedPin] {
         try parser.parse(at: url)
     }
 
+    /// Determines whether the resolved file is tracked, ignored, untracked, or missing.
+    ///
+    /// - Parameter resolvedFileURL: The resolved file location to inspect in git.
+    /// - Returns: The structured file status used by findings and CLI exit codes.
     public func auditGitTracking(resolvedFileURL: URL) async throws -> ResolvedFileStatus {
         try await gitTrackingAuditor.audit(resolvedFileURL: resolvedFileURL)
     }
 
+    /// Reads the schema version from a `Package.resolved` file and classifies its compatibility.
+    ///
+    /// - Parameter url: The resolved file URL to inspect.
+    /// - Returns: Schema metadata ready to render directly in the report.
     public func checkSchemaVersion(at url: URL) throws -> SchemaInfo {
         try schemaChecker.check(at: url)
     }
 
+    /// Evaluates whether version-pinned remote dependencies have newer stable releases available.
+    ///
+    /// - Parameter pins: Parsed dependency pins from the resolved file.
+    /// - Returns: One outdated-check result per eligible remote version pin.
+    /// - Throws: Cancellation when the parent task is cancelled. Remote lookup failures for
+    ///   individual dependencies are converted into notes instead of terminating the entire audit.
     public func checkOutdated(_ pins: [ResolvedPin]) async throws -> [OutdatedResult] {
         try await outdatedChecker.check(pins)
     }
 
+    /// Flags branch, revision, and local-path pins that reduce reproducibility.
+    ///
+    /// - Parameter pins: Parsed dependency pins from the resolved file.
+    /// - Returns: Strategy findings for every dependency, including `.normal` entries.
     public func auditRequirementStrategies(_ pins: [ResolvedPin]) -> [StrategyFinding] {
         strategyAuditor.audit(pins)
     }
 
+    /// Converts raw audit outputs into sorted, user-facing findings.
+    ///
+    /// The engine intentionally centralizes finding assembly here so the CLI, markdown reporter,
+    /// JSON reporter, and macOS app all stay aligned on severity, wording, and recommendation
+    /// text instead of re-encoding policy at each presentation layer.
     private func makeFindings(
         status: ResolvedFileStatus,
         schema: SchemaInfo?,
@@ -182,6 +232,10 @@ public struct TrackerEngine: Sendable {
         return findings.sorted(by: findingSort)
     }
 
+    /// Chooses between the git-aware status audit and a simple existence check.
+    ///
+    /// This split exists so callers can disable repository inspection while still getting a
+    /// sensible answer for tools or environments where only file existence matters.
     private func resolvedFileStatus(for resolvedFileURL: URL) async throws -> ResolvedFileStatus {
         if configuration.checkGitTracking {
             return try await auditGitTracking(resolvedFileURL: resolvedFileURL)
@@ -189,6 +243,11 @@ public struct TrackerEngine: Sendable {
         return FileManager.default.fileExists(atPath: resolvedFileURL.path) ? .tracked : .missing
     }
 
+    /// Builds an additional finding when an outdated check completed only partially.
+    ///
+    /// Instead of losing nuance by flattening all lookup problems into "not outdated," the
+    /// engine emits explicit findings that explain whether the problem came from network access,
+    /// upstream tagging strategy, or a non-semantic resolved version.
     private func finding(for result: OutdatedResult) -> Finding? {
         guard let noteKind = result.noteKind, let note = result.note else {
             return nil
@@ -219,6 +278,7 @@ public struct TrackerEngine: Sendable {
         }
     }
 
+    /// Maps strategy risk levels to the recommendation text shown in reports.
     private func recommendation(for risk: StrategyRisk) -> String {
         switch risk {
         case .normal:
@@ -230,6 +290,10 @@ public struct TrackerEngine: Sendable {
         }
     }
 
+    /// Keeps findings ordered by severity first, category second, and message last.
+    ///
+    /// The sort is deterministic so tests, CLI output, exported reports, and UI snapshots remain
+    /// stable across runs with the same underlying data.
     private func findingSort(lhs: Finding, rhs: Finding) -> Bool {
         let severityOrder: [Severity: Int] = [.error: 0, .warning: 1, .info: 2]
         let categoryOrder: [FindingCategory: Int] = [.gitTracking: 0, .schema: 1, .pinStrategy: 2, .outdated: 3]

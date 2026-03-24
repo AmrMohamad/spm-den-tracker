@@ -1,8 +1,11 @@
 import Foundation
 
+/// Renders reports as markdown suitable for sharing in documents or pull requests.
 public struct MarkdownReporter: ReportFormatter {
+    /// Creates a markdown reporter.
     public init() {}
 
+    /// Formats the report into sections for metadata, findings, and dependencies.
     public func format(_ report: DependencyReport) -> String {
         var lines: [String] = []
         lines.append("# SPM Dependency Report")

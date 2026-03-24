@@ -1,6 +1,8 @@
 import Foundation
 
+/// Resolves user input into the canonical `Package.resolved` path used by Xcode projects.
 struct XcodeprojLocator: Sendable {
+    /// Accepts a project bundle, project directory, or resolved file path and returns the lockfile location.
     func locateResolvedFile(at rawPath: String) throws -> URL {
         let fileManager = FileManager.default
         let inputURL = URL(fileURLWithPath: rawPath).standardizedFileURL
@@ -31,6 +33,7 @@ struct XcodeprojLocator: Sendable {
         throw DependencyTrackerError.invalidPath(rawPath)
     }
 
+    /// Builds the conventional Xcode workspace path for a project's resolved file.
     private func resolvedURL(forProject projectURL: URL) -> URL {
         projectURL
             .appendingPathComponent("project.xcworkspace", isDirectory: true)
@@ -39,6 +42,7 @@ struct XcodeprojLocator: Sendable {
             .appendingPathComponent("Package.resolved")
     }
 
+    /// Scans one directory level for `.xcodeproj` bundles so repo roots stay predictable.
     private func xcodeprojCandidates(in directory: URL) throws -> [URL] {
         let fileManager = FileManager.default
         // Directory inputs intentionally scan only immediate children so the tool

@@ -1,6 +1,8 @@
 import Foundation
 
+/// Flags dependency pins whose strategy makes builds less reproducible or portable.
 struct RequirementStrategyAuditor: Sendable {
+    /// Maps each pin to its risk class and explanatory message.
     func audit(_ pins: [ResolvedPin]) -> [StrategyFinding] {
         pins.map { pin in
             let risk: StrategyRisk

@@ -1,8 +1,11 @@
 import Foundation
 
+/// Renders reports as aligned plain text for terminal output.
 public struct TableReporter: ReportFormatter {
+    /// Creates a table reporter.
     public init() {}
 
+    /// Formats the report into a terminal-friendly summary followed by an aligned dependency table.
     public func format(_ report: DependencyReport) -> String {
         var lines: [String] = []
         lines.append("SPM Dependency Tracker")
@@ -41,18 +44,21 @@ public struct TableReporter: ReportFormatter {
         return lines.joined(separator: "\n")
     }
 
+    /// Pads each row to the computed column widths.
     private func row(_ columns: [String], widths: [Int]) -> String {
         return zip(columns, widths)
             .map { value, width in value.padding(toLength: width, withPad: " ", startingAt: 0) }
             .joined(separator: "  ")
     }
 
+    /// Computes the widest value in each column so long package names do not get truncated.
     private func columnWidths(headers: [String], rows: [[String]]) -> [Int] {
         headers.enumerated().map { index, header in
             max(header.count, rows.map { $0[index].count }.max() ?? 0)
         }
     }
 
+    /// Builds the underline row that visually separates table headers from data.
     private func separator(widths: [Int]) -> String {
         widths
             .map { String(repeating: "-", count: $0) }

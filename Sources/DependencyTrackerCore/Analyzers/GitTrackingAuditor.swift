@@ -1,12 +1,16 @@
 import Foundation
 
+/// Audits whether the resolved lockfile is present and properly tracked by git.
 struct GitTrackingAuditor: Sendable {
+    /// The git abstraction used so repository checks remain testable.
     private let gitClient: GitClientProtocol
 
+    /// Creates an auditor backed by the supplied git client.
     init(gitClient: GitClientProtocol) {
         self.gitClient = gitClient
     }
 
+    /// Resolves the lockfile status by checking existence, repository membership, tracking, and ignore rules.
     func audit(resolvedFileURL: URL) async throws -> ResolvedFileStatus {
         guard FileManager.default.fileExists(atPath: resolvedFileURL.path) else {
             return .missing

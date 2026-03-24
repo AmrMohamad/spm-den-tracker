@@ -1,15 +1,28 @@
 import Foundation
 import Version
 
+/// Checks remote version-pinned dependencies for newer stable semantic tags.
 struct OutdatedChecker: Sendable {
+    /// The git abstraction used to query upstream tags.
     private let gitClient: GitClientProtocol
+    /// The maximum number of concurrent remote lookups allowed in one run.
     private let concurrentFetchLimit: Int
 
+    /// Creates an outdated checker with a bounded lookup fan-out.
     init(gitClient: GitClientProtocol, concurrentFetchLimit: Int) {
         self.gitClient = gitClient
         self.concurrentFetchLimit = max(1, concurrentFetchLimit)
     }
 
+    /// Evaluates all eligible pins and preserves deterministic output ordering.
+    ///
+    /// Only remote dependencies pinned to semantic versions participate in this check. The bounded
+    /// task-group fan-out prevents a large lockfile from spawning unbounded remote fetch work while
+    /// still allowing the check to make progress in parallel.
+    ///
+    /// - Parameter pins: The parsed dependency pins from `Package.resolved`.
+    /// - Returns: Outdated results sorted by package identity for stable downstream rendering.
+    /// - Throws: `CancellationError` when the parent task is cancelled.
     func check(_ pins: [ResolvedPin]) async throws -> [OutdatedResult] {
         let versionPins = pins.filter {
             if case .version = $0.state, $0.kind == .remoteSourceControl {
@@ -45,6 +58,12 @@ struct OutdatedChecker: Sendable {
         }
     }
 
+    /// Computes the update state for a single dependency while preserving structured failure notes.
+    ///
+    /// The method intentionally converts most remote lookup problems into note-bearing
+    /// `OutdatedResult` values rather than throwing, because one flaky upstream should not suppress
+    /// the rest of the report. Only cancellation escapes immediately so the caller can stop work
+    /// promptly when a newer analysis request supersedes the current one.
     private func evaluate(_ pin: ResolvedPin) async throws -> OutdatedResult {
         guard case .version(let currentVersion, _) = pin.state else {
             return OutdatedResult(pin: pin, latestVersion: nil, updateType: nil, isOutdated: false)
@@ -103,6 +122,10 @@ struct OutdatedChecker: Sendable {
         }
     }
 
+    /// Converts `git ls-remote --tags` refs into stable semantic versions and discards prereleases.
+    ///
+    /// Annotated refs such as `^{}` are normalized, optional leading `v` prefixes are stripped,
+    /// and prerelease identifiers are ignored so the comparison stays focused on stable releases.
     private func normalizedVersion(fromTag tag: String) -> Version? {
         guard let ref = tag.split(separator: "/").last.map(String.init) else {
             return nil
