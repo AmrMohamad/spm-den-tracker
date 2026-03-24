@@ -22,12 +22,32 @@ public struct TrackerEngine: Sendable {
     }
 
     public func analyze(projectPath: String) async throws -> DependencyReport {
-        let resolvedFileURL = try await locateResolvedFile(at: projectPath)
+        let resolvedFileURL = try locateResolvedFile(at: projectPath)
+        let fileStatus = try await resolvedFileStatus(for: resolvedFileURL)
+
+        guard fileStatus != .missing else {
+            let findings = makeFindings(
+                status: fileStatus,
+                schema: nil,
+                strategyFindings: [],
+                outdatedResults: []
+            )
+
+            return DependencyReport(
+                projectPath: projectPath,
+                generatedAt: Date(),
+                resolvedFilePath: resolvedFileURL.path,
+                resolvedFileStatus: fileStatus,
+                schemaVersion: nil,
+                dependencies: [],
+                findings: findings
+            )
+        }
+
         let pins = try parseResolved(at: resolvedFileURL)
-        let fileStatus = configuration.checkGitTracking ? try await auditGitTracking(resolvedFileURL: resolvedFileURL) : .tracked
         let schema = try checkSchemaVersion(at: resolvedFileURL)
         let strategyFindings = auditRequirementStrategies(pins)
-        let outdated = configuration.checkOutdated ? await checkOutdated(pins) : []
+        let outdated = configuration.checkOutdated ? try await checkOutdated(pins) : []
 
         let outdatedByIdentity = Dictionary(uniqueKeysWithValues: outdated.map { ($0.pin.identity, $0) })
         let riskByIdentity = Dictionary(uniqueKeysWithValues: strategyFindings.map { ($0.pin.identity, $0.risk) })
@@ -58,7 +78,7 @@ public struct TrackerEngine: Sendable {
         )
     }
 
-    public func locateResolvedFile(at path: String) async throws -> URL {
+    public func locateResolvedFile(at path: String) throws -> URL {
         try locator.locateResolvedFile(at: path)
     }
 
@@ -67,15 +87,15 @@ public struct TrackerEngine: Sendable {
     }
 
     public func auditGitTracking(resolvedFileURL: URL) async throws -> ResolvedFileStatus {
-        try gitTrackingAuditor.audit(resolvedFileURL: resolvedFileURL)
+        try await gitTrackingAuditor.audit(resolvedFileURL: resolvedFileURL)
     }
 
     public func checkSchemaVersion(at url: URL) throws -> SchemaInfo {
         try schemaChecker.check(at: url)
     }
 
-    public func checkOutdated(_ pins: [ResolvedPin]) async -> [OutdatedResult] {
-        await outdatedChecker.check(pins)
+    public func checkOutdated(_ pins: [ResolvedPin]) async throws -> [OutdatedResult] {
+        try await outdatedChecker.check(pins)
     }
 
     public func auditRequirementStrategies(_ pins: [ResolvedPin]) -> [StrategyFinding] {
@@ -84,7 +104,7 @@ public struct TrackerEngine: Sendable {
 
     private func makeFindings(
         status: ResolvedFileStatus,
-        schema: SchemaInfo,
+        schema: SchemaInfo?,
         strategyFindings: [StrategyFinding],
         outdatedResults: [OutdatedResult]
     ) -> [Finding] {
@@ -116,25 +136,27 @@ public struct TrackerEngine: Sendable {
             ))
         }
 
-        if schema.compatibility == .legacy {
-            findings.append(Finding(
-                severity: .warning,
-                category: .schema,
-                message: schema.message,
-                recommendation: "Verify whether your CI and developer machines intentionally support older Xcode schema output."
-            ))
-        } else {
-            findings.append(Finding(
-                severity: .info,
-                category: .schema,
-                message: schema.message,
-                recommendation: "Keep Xcode versions aligned across local development and CI."
-            ))
+        if let schema {
+            if schema.compatibility == .legacy {
+                findings.append(Finding(
+                    severity: .warning,
+                    category: .schema,
+                    message: schema.message,
+                    recommendation: "Verify whether your CI and developer machines intentionally support older Xcode schema output."
+                ))
+            } else {
+                findings.append(Finding(
+                    severity: .info,
+                    category: .schema,
+                    message: schema.message,
+                    recommendation: "Keep Xcode versions aligned across local development and CI."
+                ))
+            }
         }
 
         for strategyFinding in strategyFindings where strategyFinding.risk != .normal {
             findings.append(Finding(
-                severity: strategyFinding.risk == .environmentSensitive ? .warning : .warning,
+                severity: .warning,
                 category: .pinStrategy,
                 message: strategyFinding.message,
                 recommendation: recommendation(for: strategyFinding.risk)
@@ -151,16 +173,50 @@ public struct TrackerEngine: Sendable {
             ))
         }
 
-        for result in outdatedResults where result.note != nil {
-            findings.append(Finding(
-                severity: .warning,
-                category: .outdated,
-                message: "Unable to fully assess updates for \"\(result.pin.identity)\": \(result.note ?? "unknown reason").",
-                recommendation: "Verify the remote repository is reachable and publishes stable semantic tags."
-            ))
+        for result in outdatedResults {
+            if let finding = finding(for: result) {
+                findings.append(finding)
+            }
         }
 
         return findings.sorted(by: findingSort)
+    }
+
+    private func resolvedFileStatus(for resolvedFileURL: URL) async throws -> ResolvedFileStatus {
+        if configuration.checkGitTracking {
+            return try await auditGitTracking(resolvedFileURL: resolvedFileURL)
+        }
+        return FileManager.default.fileExists(atPath: resolvedFileURL.path) ? .tracked : .missing
+    }
+
+    private func finding(for result: OutdatedResult) -> Finding? {
+        guard let noteKind = result.noteKind, let note = result.note else {
+            return nil
+        }
+
+        switch noteKind {
+        case .remoteLookupFailure:
+            return Finding(
+                severity: .warning,
+                category: .outdated,
+                message: "Unable to fully assess updates for \"\(result.pin.identity)\": \(note)",
+                recommendation: "Verify the remote repository is reachable and publishes stable semantic tags."
+            )
+        case .noStableSemanticTags:
+            return Finding(
+                severity: .warning,
+                category: .outdated,
+                message: "Unable to fully assess updates for \"\(result.pin.identity)\": \(note)",
+                recommendation: "Verify the upstream repository publishes stable semantic tags or disable outdated checks for this dependency."
+            )
+        case .nonSemanticResolvedVersion:
+            return Finding(
+                severity: .info,
+                category: .outdated,
+                message: "Unable to fully assess updates for \"\(result.pin.identity)\": \(note)",
+                recommendation: "Pin the dependency to a semantic version tag if you want outdated checks to compare it against upstream releases."
+            )
+        }
     }
 
     private func recommendation(for risk: StrategyRisk) -> String {

@@ -1,6 +1,6 @@
 import Foundation
 
-struct RequirementStrategyAuditor {
+struct RequirementStrategyAuditor: Sendable {
     func audit(_ pins: [ResolvedPin]) -> [StrategyFinding] {
         pins.map { pin in
             let risk: StrategyRisk

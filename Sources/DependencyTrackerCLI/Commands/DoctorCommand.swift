@@ -12,10 +12,18 @@ struct Doctor: AsyncParsableCommand {
     var projectPath: String
 
     func run() async throws {
-        let projectPath = try CLIInput.resolvedProjectPath(projectPath)
-        let context = CLIContext()
-        let report = try await context.engine.analyze(projectPath: projectPath)
-        CLIOutput.write(context.tableFormatter.format(report))
-        throw ExitCode(report.hasActionableFindings ? 1 : 0)
+        throw try await Self.execute(projectPath: projectPath)
+    }
+
+    static func execute(
+        projectPath: String,
+        context: CLIContext = CLIContext(),
+        write: (String) -> Void = CLIOutput.write,
+        writeError: (String) -> Void = CLIOutput.writeError
+    ) async throws -> ExitCode {
+        let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
+        let report = try await context.engine.analyze(projectPath: resolvedPath)
+        write(context.tableFormatter.format(report))
+        return ExitCode(report.hasActionableFindings ? 1 : 0)
     }
 }

@@ -1,11 +1,11 @@
 import DependencyTrackerCore
 import Foundation
 
-protocol DependencyTrackingService {
+protocol DependencyTrackingService: Sendable {
     func analyze(projectPath: String) async throws -> DependencyReport
 }
 
-struct LiveDependencyTrackingService: DependencyTrackingService {
+struct LiveDependencyTrackingService: DependencyTrackingService, Sendable {
     private let engine: TrackerEngine
 
     init(engine: TrackerEngine = TrackerEngine(configuration: TrackerConfiguration())) {

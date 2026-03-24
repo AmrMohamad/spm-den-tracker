@@ -20,6 +20,38 @@ struct GitTrackingAuditorTests {
     }
 
     @Test
+    func locatorResolvesDirectResolvedFilePath() throws {
+        let temp = try temporaryDirectory()
+        let resolvedURL = temp
+            .appendingPathComponent("Sample.xcodeproj", isDirectory: true)
+            .appendingPathComponent("project.xcworkspace", isDirectory: true)
+            .appendingPathComponent("xcshareddata", isDirectory: true)
+            .appendingPathComponent("swiftpm", isDirectory: true)
+            .appendingPathComponent("Package.resolved")
+        try FileManager.default.createDirectory(at: resolvedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: resolvedURL.path, contents: Data())
+
+        let located = try XcodeprojLocator().locateResolvedFile(at: resolvedURL.path)
+        #expect(located == resolvedURL)
+    }
+
+    @Test
+    func locatorResolvesDirectoryWithSingleProject() throws {
+        let temp = try temporaryDirectory()
+        let projectURL = temp.appendingPathComponent("Sample.xcodeproj", isDirectory: true)
+        let resolvedURL = projectURL
+            .appendingPathComponent("project.xcworkspace", isDirectory: true)
+            .appendingPathComponent("xcshareddata", isDirectory: true)
+            .appendingPathComponent("swiftpm", isDirectory: true)
+            .appendingPathComponent("Package.resolved")
+        try FileManager.default.createDirectory(at: resolvedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: resolvedURL.path, contents: Data())
+
+        let located = try XcodeprojLocator().locateResolvedFile(at: temp.path)
+        #expect(located.standardizedFileURL == resolvedURL.standardizedFileURL)
+    }
+
+    @Test
     func locatorRejectsAmbiguousDirectory() throws {
         let temp = try temporaryDirectory()
         try FileManager.default.createDirectory(at: temp.appendingPathComponent("One.xcodeproj"), withIntermediateDirectories: true)
@@ -31,23 +63,23 @@ struct GitTrackingAuditorTests {
     }
 
     @Test
-    func trackedFileIsReportedAsTracked() throws {
+    func trackedFileIsReportedAsTracked() async throws {
         let context = try makeRepositoryContext()
         try runProcess(["git", "add", context.resolvedFile.path], in: context.root)
 
         let auditor = GitTrackingAuditor(gitClient: GitClient(timeout: 5))
-        let status = try auditor.audit(resolvedFileURL: context.resolvedFile)
+        let status = try await auditor.audit(resolvedFileURL: context.resolvedFile)
 
         #expect(status.isTracked)
     }
 
     @Test
-    func ignoredFileReportsRuleMetadata() throws {
+    func ignoredFileReportsRuleMetadata() async throws {
         let context = try makeRepositoryContext()
         try "*.xcworkspace\n".write(to: context.root.appendingPathComponent(".gitignore"), atomically: true, encoding: .utf8)
 
         let auditor = GitTrackingAuditor(gitClient: GitClient(timeout: 5))
-        let status = try auditor.audit(resolvedFileURL: context.resolvedFile)
+        let status = try await auditor.audit(resolvedFileURL: context.resolvedFile)
 
         guard case .gitignored(let match) = status else {
             Issue.record("Expected gitignored status, got \(status)")
@@ -58,22 +90,22 @@ struct GitTrackingAuditorTests {
     }
 
     @Test
-    func existingButUntrackedFileIsReportedAsUntracked() throws {
+    func existingButUntrackedFileIsReportedAsUntracked() async throws {
         let context = try makeRepositoryContext()
 
         let auditor = GitTrackingAuditor(gitClient: GitClient(timeout: 5))
-        let status = try auditor.audit(resolvedFileURL: context.resolvedFile)
+        let status = try await auditor.audit(resolvedFileURL: context.resolvedFile)
 
         #expect(status == .untracked)
     }
 
     @Test
-    func missingFileIsReportedAsMissing() throws {
+    func missingFileIsReportedAsMissing() async throws {
         let temp = try temporaryDirectory()
         let missing = temp.appendingPathComponent("Missing.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
 
         let auditor = GitTrackingAuditor(gitClient: GitClient(timeout: 5))
-        let status = try auditor.audit(resolvedFileURL: missing)
+        let status = try await auditor.audit(resolvedFileURL: missing)
 
         #expect(status == .missing)
     }

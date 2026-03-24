@@ -15,6 +15,13 @@ struct ReporterTests {
     }
 
     @Test
+    func tableReporterDoesNotTruncateLongPackageNames() {
+        let output = TableReporter().format(sampleReport())
+
+        #expect(output.contains("swift-package-with-a-very-long-identity"))
+    }
+
+    @Test
     func jsonReporterEmitsCodablePayload() throws {
         let report = sampleReport()
 
@@ -30,7 +37,7 @@ struct ReporterTests {
 }
 
 private func sampleReport() -> DependencyReport {
-    let pin = ResolvedPin(identity: "alamofire", kind: .remoteSourceControl, location: "https://github.com/Alamofire/Alamofire.git", state: .version("5.9.1", revision: "abc"))
+    let pin = ResolvedPin(identity: "swift-package-with-a-very-long-identity", kind: .remoteSourceControl, location: "https://github.com/Alamofire/Alamofire.git", state: .version("5.9.1", revision: "abc"))
     let outdated = OutdatedResult(pin: pin, latestVersion: "5.10.0", updateType: .minor, isOutdated: true)
     return DependencyReport(
         projectPath: "/tmp/App.xcodeproj",

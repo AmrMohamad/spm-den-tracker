@@ -13,7 +13,6 @@ final class FindingsTableView: NSScrollView {
         autohidesScrollers = true
         documentView = tableView
         setupColumns()
-        tableView.headerView = nil
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.delegate = self
         tableView.dataSource = self

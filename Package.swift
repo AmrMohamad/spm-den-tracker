@@ -32,6 +32,10 @@ let package = Package(
             dependencies: ["DependencyTrackerCore"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(
+            name: "DependencyTrackerCLITests",
+            dependencies: ["DependencyTrackerCLI", "DependencyTrackerCore"]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

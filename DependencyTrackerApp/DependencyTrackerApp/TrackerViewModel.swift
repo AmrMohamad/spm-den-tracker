@@ -15,6 +15,7 @@ final class TrackerViewModel: ObservableObject {
     private let markdownFormatter = MarkdownReporter()
     private let jsonFormatter = JSONReporter()
     private var analysisTask: Task<Void, Never>?
+    private var activeAnalysisID: UUID?
 
     init(service: DependencyTrackingService) {
         self.service = service
@@ -26,7 +27,12 @@ final class TrackerViewModel: ObservableObject {
 
     func analyze() {
         let expandedPath = (projectPath as NSString).expandingTildeInPath
+        analysisTask?.cancel()
+
         guard !expandedPath.isEmpty else {
+            activeAnalysisID = nil
+            analysisTask = nil
+            isAnalyzing = false
             errorMessage = "Select an Xcode project, project directory, or Package.resolved file."
             report = nil
             findings = []
@@ -34,32 +40,33 @@ final class TrackerViewModel: ObservableObject {
             return
         }
 
-        analysisTask?.cancel()
+        let analysisID = UUID()
+        activeAnalysisID = analysisID
         isAnalyzing = true
         errorMessage = nil
 
-        analysisTask = Task { [service] in
+        analysisTask = Task { [weak self, service] in
             do {
                 let report = try await service.analyze(projectPath: expandedPath)
-                await MainActor.run {
-                    self.report = report
-                    self.findings = report.findings
-                    self.dependencies = report.dependencies
-                    self.errorMessage = nil
-                    self.isAnalyzing = false
-                }
+                guard let self, self.activeAnalysisID == analysisID else { return }
+                self.activeAnalysisID = nil
+                self.report = report
+                self.findings = report.findings
+                self.dependencies = report.dependencies
+                self.errorMessage = nil
+                self.isAnalyzing = false
             } catch is CancellationError {
-                await MainActor.run {
-                    self.isAnalyzing = false
-                }
+                guard let self, self.activeAnalysisID == analysisID else { return }
+                self.activeAnalysisID = nil
+                self.isAnalyzing = false
             } catch {
-                await MainActor.run {
-                    self.report = nil
-                    self.findings = []
-                    self.dependencies = []
-                    self.errorMessage = error.localizedDescription
-                    self.isAnalyzing = false
-                }
+                guard let self, self.activeAnalysisID == analysisID else { return }
+                self.activeAnalysisID = nil
+                self.report = nil
+                self.findings = []
+                self.dependencies = []
+                self.errorMessage = error.localizedDescription
+                self.isAnalyzing = false
             }
         }
     }

@@ -5,7 +5,7 @@ struct ResolvedFileDocument: Sendable {
     let pins: [ResolvedPin]
 }
 
-struct ResolvedFileParser {
+struct ResolvedFileParser: Sendable {
     func parse(at url: URL) throws -> [ResolvedPin] {
         try parseDocument(at: url).pins
     }

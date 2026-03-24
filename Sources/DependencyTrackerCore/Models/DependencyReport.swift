@@ -54,18 +54,33 @@ public enum UpdateType: String, Codable, Hashable, Sendable {
     case major
 }
 
+public enum OutdatedNoteKind: String, Codable, Hashable, Sendable {
+    case remoteLookupFailure
+    case noStableSemanticTags
+    case nonSemanticResolvedVersion
+}
+
 public struct OutdatedResult: Codable, Hashable, Sendable {
     public let pin: ResolvedPin
     public let latestVersion: String?
     public let updateType: UpdateType?
     public let isOutdated: Bool
+    public let noteKind: OutdatedNoteKind?
     public let note: String?
 
-    public init(pin: ResolvedPin, latestVersion: String?, updateType: UpdateType?, isOutdated: Bool, note: String? = nil) {
+    public init(
+        pin: ResolvedPin,
+        latestVersion: String?,
+        updateType: UpdateType?,
+        isOutdated: Bool,
+        noteKind: OutdatedNoteKind? = nil,
+        note: String? = nil
+    ) {
         self.pin = pin
         self.latestVersion = latestVersion
         self.updateType = updateType
         self.isOutdated = isOutdated
+        self.noteKind = noteKind
         self.note = note
     }
 }
@@ -132,7 +147,7 @@ public struct DependencyReport: Codable, Sendable {
     public let generatedAt: Date
     public let resolvedFilePath: String
     public let resolvedFileStatus: ResolvedFileStatus
-    public let schemaVersion: SchemaInfo
+    public let schemaVersion: SchemaInfo?
     public let dependencies: [DependencyAnalysis]
     public let findings: [Finding]
 
@@ -141,7 +156,7 @@ public struct DependencyReport: Codable, Sendable {
         generatedAt: Date,
         resolvedFilePath: String,
         resolvedFileStatus: ResolvedFileStatus,
-        schemaVersion: SchemaInfo,
+        schemaVersion: SchemaInfo?,
         dependencies: [DependencyAnalysis],
         findings: [Finding]
     ) {

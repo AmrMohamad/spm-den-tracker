@@ -9,7 +9,7 @@ public struct MarkdownReporter: ReportFormatter {
         lines.append("")
         lines.append("- Project: `\(report.projectPath)`")
         lines.append("- Resolved file: `\(report.resolvedFilePath)`")
-        lines.append("- Generated at: `\(ISO8601DateFormatter().string(from: report.generatedAt))`")
+        lines.append("- Generated at: `\(report.generatedAt.ISO8601Format())`")
         lines.append("")
         lines.append("## Findings")
         lines.append("")

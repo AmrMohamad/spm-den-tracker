@@ -21,17 +21,28 @@ struct Report: AsyncParsableCommand {
     var output: String?
 
     func run() async throws {
-        let projectPath = try CLIInput.resolvedProjectPath(projectPath)
-        let context = CLIContext()
-        let report = try await context.engine.analyze(projectPath: projectPath)
+        throw try await Self.execute(projectPath: projectPath, format: format, output: output)
+    }
+
+    static func execute(
+        projectPath: String,
+        format: ReportFormat,
+        output: String?,
+        context: CLIContext = CLIContext(),
+        write: (String) -> Void = CLIOutput.write,
+        writeFile: (String, URL) throws -> Void = CLIOutput.write,
+        writeError: (String) -> Void = CLIOutput.writeError
+    ) async throws -> ExitCode {
+        let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
+        let report = try await context.engine.analyze(projectPath: resolvedPath)
         let rendered = context.render(report, format: format)
 
         if let output {
-            try CLIOutput.write(rendered, to: URL(fileURLWithPath: output))
+            try writeFile(rendered, URL(fileURLWithPath: output))
         } else {
-            CLIOutput.write(rendered)
+            write(rendered)
         }
 
-        throw ExitCode(report.hasActionableFindings ? 1 : 0)
+        return ExitCode(report.hasActionableFindings ? 1 : 0)
     }
 }

@@ -12,12 +12,20 @@ struct CheckTracking: AsyncParsableCommand {
     var projectPath: String
 
     func run() async throws {
-        let projectPath = try CLIInput.resolvedProjectPath(projectPath)
-        let context = CLIContext()
-        let resolvedFileURL = try await context.engine.locateResolvedFile(at: projectPath)
+        throw try await Self.execute(projectPath: projectPath)
+    }
+
+    static func execute(
+        projectPath: String,
+        context: CLIContext = CLIContext(),
+        write: (String) -> Void = CLIOutput.write,
+        writeError: (String) -> Void = CLIOutput.writeError
+    ) async throws -> ExitCode {
+        let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
+        let resolvedFileURL = try context.engine.locateResolvedFile(at: resolvedPath)
         let status = try await context.engine.auditGitTracking(resolvedFileURL: resolvedFileURL)
 
-        CLIOutput.write(context.describe(status, resolvedFileURL: resolvedFileURL))
-        throw ExitCode(status.isTracked ? 0 : 2)
+        write(context.describe(status, resolvedFileURL: resolvedFileURL))
+        return ExitCode(status.isTracked ? 0 : 2)
     }
 }

@@ -7,3 +7,5 @@ The repo is split into three deliverables:
 - `DependencyTrackerCore`: cross-platform analysis engine and formatters
 - `spm-dep-tracker`: CLI entry point for local and CI usage
 - `DependencyTrackerApp`: macOS AppKit GUI that consumes the package locally
+
+Directory inputs intentionally scan only the immediate child `.xcodeproj` bundles. If a directory contains more than one immediate project bundle, the path is treated as ambiguous.

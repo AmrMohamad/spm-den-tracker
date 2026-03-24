@@ -41,6 +41,8 @@ struct XcodeprojLocator: Sendable {
 
     private func xcodeprojCandidates(in directory: URL) throws -> [URL] {
         let fileManager = FileManager.default
+        // Directory inputs intentionally scan only immediate children so the tool
+        // behaves predictably for repo roots with multiple project bundles.
         let candidates = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
             .filter { $0.pathExtension == "xcodeproj" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }

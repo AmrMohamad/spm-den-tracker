@@ -18,7 +18,7 @@ struct AnalyzerTests {
     }
 
     @Test
-    func outdatedCheckerClassifiesMinorUpdate() async {
+    func outdatedCheckerClassifiesMinorUpdate() async throws {
         let client = StubGitClient(tags: [
             "https://example.com/sdk.git": [
                 "refs/tags/v1.2.3",
@@ -29,7 +29,7 @@ struct AnalyzerTests {
         let checker = OutdatedChecker(gitClient: client, concurrentFetchLimit: 2)
         let pin = ResolvedPin(identity: "sdk", kind: .remoteSourceControl, location: "https://example.com/sdk.git", state: .version("1.2.3", revision: "abc"))
 
-        let results = await checker.check([pin])
+        let results = try await checker.check([pin])
 
         #expect(results.count == 1)
         #expect(results[0].latestVersion == "1.4.0")
@@ -38,7 +38,29 @@ struct AnalyzerTests {
     }
 
     @Test
-    func outdatedCheckerIgnoresPrereleaseOnlyTags() async {
+    func outdatedCheckerClassifiesMajorAndPatchUpdates() async throws {
+        let client = StubGitClient(tags: [
+            "https://example.com/major.git": [
+                "refs/tags/v1.2.3",
+                "refs/tags/v2.0.0",
+            ],
+            "https://example.com/patch.git": [
+                "refs/tags/v1.2.3",
+                "refs/tags/v1.2.4",
+            ],
+        ])
+        let checker = OutdatedChecker(gitClient: client, concurrentFetchLimit: 2)
+        let majorPin = ResolvedPin(identity: "major", kind: .remoteSourceControl, location: "https://example.com/major.git", state: .version("1.2.3", revision: "abc"))
+        let patchPin = ResolvedPin(identity: "patch", kind: .remoteSourceControl, location: "https://example.com/patch.git", state: .version("1.2.3", revision: "def"))
+
+        let results = try await checker.check([majorPin, patchPin])
+
+        #expect(results.first(where: { $0.pin.identity == "major" })?.updateType == .major)
+        #expect(results.first(where: { $0.pin.identity == "patch" })?.updateType == .patch)
+    }
+
+    @Test
+    func outdatedCheckerIgnoresPrereleaseOnlyTags() async throws {
         let client = StubGitClient(tags: [
             "https://example.com/sdk.git": [
                 "refs/tags/v2.0.0-beta.1",
@@ -48,21 +70,55 @@ struct AnalyzerTests {
         let checker = OutdatedChecker(gitClient: client, concurrentFetchLimit: 1)
         let pin = ResolvedPin(identity: "sdk", kind: .remoteSourceControl, location: "https://example.com/sdk.git", state: .version("1.2.3", revision: "abc"))
 
-        let result = await checker.check([pin]).first
+        let result = try await checker.check([pin]).first
 
         #expect(result?.isOutdated == false)
         #expect(result?.latestVersion == "1.2.3")
     }
 
     @Test
-    func outdatedCheckerCapturesRemoteFailuresAsNotes() async {
+    func outdatedCheckerReportsNoStableSemanticTags() async throws {
+        let client = StubGitClient(tags: [
+            "https://example.com/sdk.git": [
+                "refs/tags/dev-build",
+                "refs/tags/beta.1",
+            ]
+        ])
+        let checker = OutdatedChecker(gitClient: client, concurrentFetchLimit: 1)
+        let pin = ResolvedPin(identity: "sdk", kind: .remoteSourceControl, location: "https://example.com/sdk.git", state: .version("1.2.3", revision: "abc"))
+
+        let result = try await checker.check([pin]).first
+
+        #expect(result?.isOutdated == false)
+        #expect(result?.noteKind == .noStableSemanticTags)
+    }
+
+    @Test
+    func outdatedCheckerReportsNonSemanticResolvedVersion() async throws {
+        let client = StubGitClient(tags: [
+            "https://example.com/sdk.git": [
+                "refs/tags/v1.4.0",
+            ]
+        ])
+        let checker = OutdatedChecker(gitClient: client, concurrentFetchLimit: 1)
+        let pin = ResolvedPin(identity: "sdk", kind: .remoteSourceControl, location: "https://example.com/sdk.git", state: .version("main-snapshot", revision: "abc"))
+
+        let result = try await checker.check([pin]).first
+
+        #expect(result?.isOutdated == false)
+        #expect(result?.noteKind == .nonSemanticResolvedVersion)
+    }
+
+    @Test
+    func outdatedCheckerCapturesRemoteFailuresAsNotes() async throws {
         let client = StubGitClient(erroringLocations: ["https://example.com/sdk.git"])
         let checker = OutdatedChecker(gitClient: client, concurrentFetchLimit: 1)
         let pin = ResolvedPin(identity: "sdk", kind: .remoteSourceControl, location: "https://example.com/sdk.git", state: .version("1.2.3", revision: "abc"))
 
-        let result = await checker.check([pin]).first
+        let result = try await checker.check([pin]).first
 
         #expect(result?.isOutdated == false)
+        #expect(result?.noteKind == .remoteLookupFailure)
         #expect(result?.note != nil)
     }
 }
@@ -76,11 +132,11 @@ private struct StubGitClient: GitClientProtocol {
         self.erroringLocations = erroringLocations
     }
 
-    func repositoryRoot(containing path: URL) throws -> URL? { path.deletingLastPathComponent() }
-    func isTracked(filePath: URL, repositoryRoot: URL) throws -> Bool { false }
-    func checkIgnore(filePath: URL, repositoryRoot: URL) throws -> GitIgnoreMatch? { nil }
+    func repositoryRoot(containing path: URL) async throws -> URL? { path.deletingLastPathComponent() }
+    func isTracked(filePath: URL, repositoryRoot: URL) async throws -> Bool { false }
+    func checkIgnore(filePath: URL, repositoryRoot: URL) async throws -> GitIgnoreMatch? { nil }
 
-    func remoteTags(for location: String) throws -> [String] {
+    func remoteTags(for location: String) async throws -> [String] {
         if erroringLocations.contains(location) {
             throw DependencyTrackerError.commandFailed(command: ["git", "ls-remote", "--tags", location], status: 1, stderr: "network failed")
         }

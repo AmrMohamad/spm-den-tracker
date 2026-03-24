@@ -1,10 +1,10 @@
 import Foundation
 
 protocol GitClientProtocol: Sendable {
-    func repositoryRoot(containing path: URL) throws -> URL?
-    func isTracked(filePath: URL, repositoryRoot: URL) throws -> Bool
-    func checkIgnore(filePath: URL, repositoryRoot: URL) throws -> GitIgnoreMatch?
-    func remoteTags(for location: String) throws -> [String]
+    func repositoryRoot(containing path: URL) async throws -> URL?
+    func isTracked(filePath: URL, repositoryRoot: URL) async throws -> Bool
+    func checkIgnore(filePath: URL, repositoryRoot: URL) async throws -> GitIgnoreMatch?
+    func remoteTags(for location: String) async throws -> [String]
 }
 
 struct GitClient: GitClientProtocol {
@@ -16,9 +16,9 @@ struct GitClient: GitClientProtocol {
         self.timeout = timeout
     }
 
-    func repositoryRoot(containing path: URL) throws -> URL? {
+    func repositoryRoot(containing path: URL) async throws -> URL? {
         let directory = path.hasDirectoryPath ? path : path.deletingLastPathComponent()
-        let result = try processRunner.run(
+        let result = try await processRunner.run(
             arguments: ["git", "-C", directory.path, "rev-parse", "--show-toplevel"],
             currentDirectoryURL: directory,
             timeout: timeout
@@ -34,9 +34,9 @@ struct GitClient: GitClientProtocol {
         return URL(fileURLWithPath: root, isDirectory: true)
     }
 
-    func isTracked(filePath: URL, repositoryRoot: URL) throws -> Bool {
+    func isTracked(filePath: URL, repositoryRoot: URL) async throws -> Bool {
         let relativePath = relativePath(for: filePath, repositoryRoot: repositoryRoot)
-        let result = try processRunner.run(
+        let result = try await processRunner.run(
             arguments: ["git", "-C", repositoryRoot.path, "ls-files", "--error-unmatch", relativePath],
             currentDirectoryURL: repositoryRoot,
             timeout: timeout
@@ -44,9 +44,9 @@ struct GitClient: GitClientProtocol {
         return result.status == 0
     }
 
-    func checkIgnore(filePath: URL, repositoryRoot: URL) throws -> GitIgnoreMatch? {
+    func checkIgnore(filePath: URL, repositoryRoot: URL) async throws -> GitIgnoreMatch? {
         let relativePath = relativePath(for: filePath, repositoryRoot: repositoryRoot)
-        let result = try processRunner.run(
+        let result = try await processRunner.run(
             arguments: ["git", "-C", repositoryRoot.path, "check-ignore", "-v", relativePath],
             currentDirectoryURL: repositoryRoot,
             timeout: timeout
@@ -73,8 +73,8 @@ struct GitClient: GitClientProtocol {
         return GitIgnoreMatch(sourcePath: sourcePath, line: lineNumber, pattern: pattern)
     }
 
-    func remoteTags(for location: String) throws -> [String] {
-        let result = try processRunner.run(
+    func remoteTags(for location: String) async throws -> [String] {
+        let result = try await processRunner.run(
             arguments: ["git", "ls-remote", "--tags", location],
             currentDirectoryURL: nil,
             timeout: timeout

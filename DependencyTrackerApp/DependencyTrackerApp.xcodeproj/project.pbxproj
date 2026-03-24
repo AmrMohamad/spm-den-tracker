@@ -16,7 +16,22 @@
 		A100000D233333330001 /* DependenciesTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233333330001 /* DependenciesTableView.swift */; };
 		A1000014233333330001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000013233333330001 /* Assets.xcassets */; };
 		A100001A233333333001 /* DependencyTrackerCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1000019233333330001 /* DependencyTrackerCore */; };
+		B1000001233333330001 /* TrackerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004233333330001 /* TrackerViewModelTests.swift */; };
+		B1000002233333330001 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1000006233333330001 /* XCTest.framework */; };
+		B1000003233333330001 /* DependencyTrackerCore in Frameworks */ = {isa = PBXBuildFile; productRef = B1000011233333330001 /* DependencyTrackerCore */; };
+		B1000012233333330001 /* DependencyTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004233333330001 /* DependencyTrackingService.swift */; };
+		B1000013233333330001 /* TrackerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233333330001 /* TrackerViewModel.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B100000C233333330001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000021233333330001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000012233333330001;
+			remoteInfo = DependencyTrackerApp;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A1000002233333330001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -28,6 +43,9 @@
 		A100000E233333330001 /* DependenciesTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependenciesTableView.swift; sourceTree = "<group>"; };
 		A1000011233333330001 /* DependencyTrackerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DependencyTrackerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000013233333330001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B1000004233333330001 /* TrackerViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackerViewModelTests.swift; sourceTree = "<group>"; };
+		B1000005233333330001 /* DependencyTrackerAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DependencyTrackerAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000006233333330001 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Platforms/MacOSX.platform/Developer/Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,6 +57,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B100000A233333330001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000002233333330001 /* XCTest.framework in Frameworks */,
+				B1000003233333330001 /* DependencyTrackerCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -46,6 +73,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000016233333330001 /* DependencyTrackerApp */,
+				B1000007233333330001 /* DependencyTrackerAppTests */,
 				A1000017233333330001 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000011233333330001 /* DependencyTrackerApp.app */,
+				B1000005233333330001 /* DependencyTrackerAppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,6 +108,14 @@
 				A100000E233333330001 /* DependenciesTableView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		B1000007233333330001 /* DependencyTrackerAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				B1000004233333330001 /* TrackerViewModelTests.swift */,
+			);
+			path = DependencyTrackerAppTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -103,6 +140,27 @@
 			productName = DependencyTrackerApp;
 			productReference = A1000011233333330001 /* DependencyTrackerApp.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B1000008233333330001 /* DependencyTrackerAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1000010233333330001 /* Build configuration list for PBXNativeTarget "DependencyTrackerAppTests" */;
+			buildPhases = (
+				B1000009233333330001 /* Sources */,
+				B100000A233333330001 /* Frameworks */,
+				B100000B233333330001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B100000D233333330001 /* PBXTargetDependency */,
+			);
+			name = DependencyTrackerAppTests;
+			packageProductDependencies = (
+				B1000011233333330001 /* DependencyTrackerCore */,
+			);
+			productName = DependencyTrackerAppTests;
+			productReference = B1000005233333330001 /* DependencyTrackerAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -136,6 +194,7 @@
 			projectRoot = "";
 			targets = (
 				A1000012233333330001 /* DependencyTrackerApp */,
+				B1000008233333330001 /* DependencyTrackerAppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -146,6 +205,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000014233333330001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B100000B233333330001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -166,7 +232,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1000009233333330001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000012233333330001 /* DependencyTrackingService.swift in Sources */,
+				B1000013233333330001 /* TrackerViewModel.swift in Sources */,
+				B1000001233333330001 /* TrackerViewModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B100000D233333330001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000012233333330001 /* DependencyTrackerApp */;
+			targetProxy = B100000C233333330001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1000024233333330001 /* Debug */ = {
@@ -254,6 +338,48 @@
 			};
 			name = Release;
 		};
+		B100000E233333330001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amrmohamad.SPMDependencyTrackerAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DependencyTrackerApp.app/Contents/MacOS/DependencyTrackerApp";
+				TEST_TARGET_NAME = DependencyTrackerApp;
+			};
+			name = Debug;
+		};
+		B100000F233333330001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amrmohamad.SPMDependencyTrackerAppTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DependencyTrackerApp.app/Contents/MacOS/DependencyTrackerApp";
+				TEST_TARGET_NAME = DependencyTrackerApp;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -275,6 +401,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B1000010233333330001 /* Build configuration list for PBXNativeTarget "DependencyTrackerAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B100000E233333330001 /* Debug */,
+				B100000F233333330001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -286,6 +421,11 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		A1000019233333330001 /* DependencyTrackerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1000026233333330001 /* XCLocalSwiftPackageReference ".." */;
+			productName = DependencyTrackerCore;
+		};
+		B1000011233333330001 /* DependencyTrackerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A1000026233333330001 /* XCLocalSwiftPackageReference ".." */;
 			productName = DependencyTrackerCore;

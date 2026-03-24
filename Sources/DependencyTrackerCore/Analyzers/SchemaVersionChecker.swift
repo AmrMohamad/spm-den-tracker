@@ -1,6 +1,6 @@
 import Foundation
 
-struct SchemaVersionChecker {
+struct SchemaVersionChecker: Sendable {
     private let parser = ResolvedFileParser()
 
     func check(at url: URL) throws -> SchemaInfo {
