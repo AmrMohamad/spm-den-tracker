@@ -133,6 +133,7 @@ Current repository state:
 - `DependencyTrackerApp` remains outside the formula and continues to use the guided installer
 - maintainers can prepare the stable formula inputs with `./scripts/prepare_homebrew_release.sh --version <x.y.z>`
 - the tag workflow at [release-homebrew.yml](/Users/amrmohamad/Developer/spm-den-tracker/.github/workflows/release-homebrew.yml) publishes the CLI archive and opens the formula stabilization PR automatically
+- the release archive is validated as a universal `arm64` + `x86_64` binary before the workflow publishes it
 
 Until the first stable Homebrew release is published, maintainers can still install the CLI from source with:
 

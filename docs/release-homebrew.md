@@ -12,9 +12,10 @@ Homebrew rejects plain installs for `HEAD`-only formulae.
 ## Recommended Release Shape
 
 - keep the formula in this repository's `Formula/` directory so the repo acts as the tap
-- ship a stable GitHub release asset for the CLI
+- ship a stable GitHub release asset for the CLI as one universal macOS binary
 - keep a `head` stanza in the formula for maintainer-only installs and validation
 - validate the formula in CI using a temporary local tap before merging changes
+- treat release assets as immutable for a given version; reruns must fail instead of overwriting the published archive
 
 This repo already includes that CI check in [homebrew-validate.yml](/Users/amrmohamad/Developer/spm-den-tracker/.github/workflows/homebrew-validate.yml).
 The tag-driven release path is implemented in [release-homebrew.yml](/Users/amrmohamad/Developer/spm-den-tracker/.github/workflows/release-homebrew.yml).
@@ -29,7 +30,7 @@ The tag-driven release path is implemented in [release-homebrew.yml](/Users/amrm
 
 This script:
 
-- builds the release CLI unless `--skip-build` is passed
+- builds the release CLI as a universal `arm64` + `x86_64` binary unless `--skip-build` is passed
 - creates `dist/homebrew/v<version>/spm-dep-tracker-macos.tar.gz`
 - computes the SHA-256 checksum
 - rewrites `Formula/spm-dep-tracker.rb` to include both:
@@ -72,6 +73,13 @@ For `HEAD` validation, use the same temporary tap strategy as CI:
 brew install --HEAD AmrMohamad/spm-den-tracker/spm-dep-tracker
 brew test AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
+
+For stable-release validation, the tag workflow validates all of these before publishing the release asset or opening the formula PR:
+
+- archive layout contains only the expected `spm-dep-tracker` binary
+- the archived binary is universal (`arm64` + `x86_64`)
+- the archived binary launches with `--help`
+- a synthetic stable formula that points at the locally built archive installs and passes `brew test`
 
 ## Scope
 

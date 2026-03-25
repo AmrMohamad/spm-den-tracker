@@ -42,14 +42,10 @@ jobs:
           echo "archive_path=${ARCHIVE_PATH}" >> "${GITHUB_OUTPUT}"
 
       - name: Build release CLI
-        run: swift build -c release --product spm-dep-tracker
-
-      - name: Prepare Homebrew release artifact
         run: |
           set -euo pipefail
           bash scripts/prepare_homebrew_release.sh \
             --version "${{ steps.meta.outputs.version }}" \
-            --skip-build \
             --output-dir "${{ steps.meta.outputs.output_dir }}"
 
       - name: Validate rewritten formula
@@ -57,6 +53,60 @@ jobs:
           set -euo pipefail
           ruby -c Formula/spm-dep-tracker.rb
           git diff --check
+
+      - name: Validate release archive shape
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
+          tar -tzf "${ARCHIVE_PATH}" | grep -Fx "spm-dep-tracker"
+          EXTRACT_DIR="$(mktemp -d)"
+          tar -xzf "${ARCHIVE_PATH}" -C "${EXTRACT_DIR}"
+          lipo -archs "${EXTRACT_DIR}/spm-dep-tracker" | grep -Eq 'arm64.*x86_64|x86_64.*arm64'
+          "${EXTRACT_DIR}/spm-dep-tracker" --help >/dev/null
+
+      - name: Validate stable formula against local archive
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
+          FORMULA_PATH="$(mktemp)"
+          TAP_DIR="$(mktemp -d)/homebrew-spmdeptracker-stable"
+          mkdir -p "${TAP_DIR}/Formula"
+
+          python3 - <<'PY' "${ARCHIVE_PATH}" "${FORMULA_PATH}"
+          from pathlib import Path
+          import sys
+
+          archive_path = Path(sys.argv[1]).resolve()
+          formula_out = Path(sys.argv[2])
+          content = Path("Formula/spm-dep-tracker.rb").read_text()
+          lines = []
+          for line in content.splitlines():
+              if line.startswith('  url "https://github.com/'):
+                  lines.append(f'  url "file://{archive_path}"')
+              else:
+                  lines.append(line)
+          formula_out.write_text("\n".join(lines) + "\n")
+          PY
+
+          cp "${FORMULA_PATH}" "${TAP_DIR}/Formula/spm-dep-tracker.rb"
+
+          (
+            cd "${TAP_DIR}"
+            git init -b main
+            git config user.name github-actions
+            git config user.email github-actions@users.noreply.github.com
+            git add Formula/spm-dep-tracker.rb
+            git commit -m "Add formula"
+          )
+
+          brew untap local/spmdeptracker-stable >/dev/null 2>&1 || true
+          brew uninstall --force local/spmdeptracker-stable/spm-dep-tracker >/dev/null 2>&1 || true
+          brew tap --custom-remote local/spmdeptracker-stable "file://${TAP_DIR}"
+          brew install local/spmdeptracker-stable/spm-dep-tracker
+          brew test local/spmdeptracker-stable/spm-dep-tracker
+          brew uninstall --force local/spmdeptracker-stable/spm-dep-tracker >/dev/null 2>&1 || true
+          brew untap local/spmdeptracker-stable >/dev/null 2>&1 || true
 
       - name: Publish GitHub release asset
         env:
@@ -73,12 +123,13 @@ jobs:
           }
 
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release upload "${TAG}" "${ARCHIVE_PATH}" --clobber
-          else
-            gh release create "${TAG}" "${ARCHIVE_PATH}" \
-              --title "${TAG}" \
-              --notes "Release ${TAG}"
+            echo "Release ${TAG} already exists; refusing to mutate a versioned Homebrew asset." >&2
+            exit 1
           fi
+
+          gh release create "${TAG}" "${ARCHIVE_PATH}" \
+            --title "${TAG}" \
+            --notes "Release ${TAG}"
 
       - name: Open formula stabilization PR
         uses: peter-evans/create-pull-request@v7

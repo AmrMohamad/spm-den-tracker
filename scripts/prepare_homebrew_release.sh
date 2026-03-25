@@ -10,6 +10,7 @@ OWNER="AmrMohamad"
 REPO_NAME="spm-den-tracker"
 OUTPUT_DIR="${REPO_ROOT}/dist/homebrew"
 ARCHIVE_NAME="spm-dep-tracker-macos.tar.gz"
+ARCHS=("arm64" "x86_64")
 DRY_RUN=0
 SKIP_BUILD=0
 
@@ -27,6 +28,8 @@ Options:
   --output-dir <path>     Directory where the release archive will be written.
                           Default: ${OUTPUT_DIR}
   --archive-name <name>   Archive filename. Default: ${ARCHIVE_NAME}
+  --arch <name>           Target architecture to pass to SwiftPM. Repeatable.
+                          Default: arm64 + x86_64
   --skip-build            Reuse an existing .build/release/spm-dep-tracker binary.
   --dry-run               Print the planned work without mutating files.
   -h, --help              Show this help text.
@@ -92,6 +95,14 @@ parse_args() {
         ARCHIVE_NAME="$2"
         shift 2
         ;;
+      --arch)
+        [[ $# -ge 2 ]] || fail "--arch requires a value"
+        if [[ "${ARCHS[0]}" == "arm64" && "${#ARCHS[@]}" -eq 2 && "${ARCHS[1]}" == "x86_64" ]]; then
+          ARCHS=()
+        fi
+        ARCHS+=("$2")
+        shift 2
+        ;;
       --skip-build)
         SKIP_BUILD=1
         shift
@@ -123,19 +134,57 @@ build_cli_if_needed() {
 
   require_command swift
   log "Building release CLI..."
-  run swift build -c release --product spm-dep-tracker --package-path "${REPO_ROOT}"
+  local cmd=(swift build -c release --product spm-dep-tracker --package-path "${REPO_ROOT}")
+  local arch
+  for arch in "${ARCHS[@]}"; do
+    cmd+=(--arch "${arch}")
+  done
+  run "${cmd[@]}"
+}
+
+resolve_built_binary() {
+  local candidates=(
+    "${REPO_ROOT}/.build/apple/Products/Release/spm-dep-tracker"
+    "${REPO_ROOT}/.build/release/spm-dep-tracker"
+  )
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  fail "Release binary not found in expected build output locations"
+}
+
+validate_built_binary() {
+  local built_binary="$1"
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    return 0
+  fi
+
+  if command -v lipo >/dev/null 2>&1; then
+    local reported_archs
+    reported_archs="$(lipo -archs "${built_binary}")"
+    local arch
+    for arch in "${ARCHS[@]}"; do
+      if [[ " ${reported_archs} " != *" ${arch} "* ]]; then
+        fail "Built binary at ${built_binary} is missing expected architecture ${arch}"
+      fi
+    done
+  fi
 }
 
 archive_cli() {
   local archive_path="$1"
-  local built_binary="${REPO_ROOT}/.build/release/spm-dep-tracker"
+  local built_binary
+  built_binary="$(resolve_built_binary)"
 
-  if [[ "${DRY_RUN}" -ne 1 && ! -x "${built_binary}" ]]; then
-    fail "Release binary not found at ${built_binary}"
-  fi
+  validate_built_binary "${built_binary}"
 
   run mkdir -p "$(dirname "${archive_path}")"
-  run tar -C "${REPO_ROOT}/.build/release" -czf "${archive_path}" spm-dep-tracker
+  run tar -C "$(dirname "${built_binary}")" -czf "${archive_path}" "$(basename "${built_binary}")"
 }
 
 compute_sha() {
