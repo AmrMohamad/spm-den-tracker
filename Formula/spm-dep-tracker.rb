@@ -1,4 +1,6 @@
 class SpmDepTracker < Formula
+  # Maintainer-only formula. Stable public installs are published from the
+  # dedicated tap repo `AmrMohamad/homebrew-spm-den-tracker`.
   desc "Audit Swift Package Manager lockfiles, pinning strategy, schema, and update drift"
   homepage "https://github.com/AmrMohamad/spm-den-tracker"
   head "https://github.com/AmrMohamad/spm-den-tracker.git", branch: "main"
