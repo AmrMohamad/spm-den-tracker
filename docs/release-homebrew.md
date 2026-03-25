@@ -45,26 +45,26 @@ This script:
   - a release-backed install path for the dedicated tap repo
   - a `head` install path for maintainers
 
-2. Sync the dedicated tap repo manually if needed:
-
-```bash
-./scripts/sync_homebrew_tap.sh --version 0.1.0
-```
-
-3. Create and push the release tag:
+2. Create and push the release tag:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-4. Create a GitHub release for `v0.1.0` and upload:
+3. Create a GitHub release for `v0.1.0` and upload:
 
 ```bash
 dist/homebrew/v0.1.0/spm-dep-tracker-macos.tar.gz
 ```
 
-5. Let the release workflow sync the dedicated tap repo using the `HOMEBREW_TAP_TOKEN` secret.
+4. Let the release workflow sync the dedicated tap repo using the `HOMEBREW_TAP_TOKEN` secret.
+
+5. If you need to recover or backfill the dedicated tap manually after the release asset exists:
+
+```bash
+./scripts/sync_homebrew_tap.sh --version 0.1.0
+```
 
 6. Verify the public install path:
 
@@ -79,6 +79,7 @@ Local validation before pushing:
 
 ```bash
 ruby -c Formula/spm-dep-tracker.rb
+bash scripts/prepare_homebrew_release.sh --version 0.1.0 --dry-run --formula-out /tmp/spm-dep-tracker.rb
 ```
 
 For `HEAD` validation, use the same temporary tap strategy as CI:
@@ -88,7 +89,7 @@ brew install --HEAD AmrMohamad/spm-den-tracker/spm-dep-tracker
 brew test AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
-For stable-release validation, the tag workflow validates all of these before publishing the release asset or opening the formula PR:
+For stable-release validation, the tag workflow validates all of these before publishing the release asset or syncing the dedicated tap repo:
 
 - archive layout contains only the expected `spm-dep-tracker` binary
 - the archived binary is universal (`arm64` + `x86_64`)

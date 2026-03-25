@@ -113,6 +113,8 @@ fi
 cd "${WORK_DIR}"
 git checkout "${TAP_BRANCH}"
 git pull --ff-only origin "${TAP_BRANCH}"
+git config user.name github-actions
+git config user.email github-actions@users.noreply.github.com
 
 mkdir -p "$(dirname "${FORMULA_RELATIVE_PATH}")"
 

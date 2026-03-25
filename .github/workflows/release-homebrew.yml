@@ -119,6 +119,7 @@ jobs:
 
           TAG="${GITHUB_REF_NAME}"
           ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
+          ARCHIVE_NAME="${{ steps.meta.outputs.archive_name }}"
 
           [[ -f "${ARCHIVE_PATH}" ]] || {
             echo "Expected archive missing: ${ARCHIVE_PATH}" >&2
@@ -126,8 +127,13 @@ jobs:
           }
 
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists; refusing to mutate a versioned Homebrew asset." >&2
-            exit 1
+            if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -Fx "${ARCHIVE_NAME}" >/dev/null; then
+              echo "Release ${TAG} and asset ${ARCHIVE_NAME} already exist; continuing without mutation."
+              exit 0
+            fi
+
+            gh release upload "${TAG}" "${ARCHIVE_PATH}"
+            exit 0
           fi
 
           gh release create "${TAG}" "${ARCHIVE_PATH}" \
