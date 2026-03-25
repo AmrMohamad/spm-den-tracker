@@ -1,35 +1,93 @@
 # Homebrew Release Notes
 
-This repo ships a lightweight Homebrew formula template for the CLI.
-
-## Release Steps
-
-1. Build the release binary:
+The end-user target for this repository is:
 
 ```bash
-swift build -c release --product spm-dep-tracker
+brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
-2. Archive the binary:
+That command is only valid once `Formula/spm-dep-tracker.rb` has a stable `url` and `sha256`.
+Homebrew rejects plain installs for `HEAD`-only formulae.
+
+## Recommended Release Shape
+
+- keep the formula in this repository's `Formula/` directory so the repo acts as the tap
+- ship a stable GitHub release asset for the CLI as one universal macOS binary
+- keep a `head` stanza in the formula for maintainer-only installs and validation
+- validate the formula in CI using a temporary local tap before merging changes
+- treat release assets as immutable for a given version; reruns must fail instead of overwriting the published archive
+
+This repo already includes that CI check in [homebrew-validate.yml](../.github/workflows/homebrew-validate.yml).
+The tag-driven release path is implemented in [release-homebrew.yml](../.github/workflows/release-homebrew.yml).
+
+The PR validation workflow intentionally treats `HEAD` formulas differently from stable formulas:
+
+- stable formulas are installed and tested through a temporary local tap
+- `HEAD` formulas are syntax-checked only on GitHub-hosted runners because the current runner toolchain (`Swift 6.2.3` on `Xcode 26.2`) fails inside `swift-argument-parser`, which would make maintainer-only `HEAD` validation an unreliable merge blocker
+
+## Maintainer Flow
+
+1. Prepare the release artifact and rewrite the formula:
 
 ```bash
-tar -C .build/release -czf spm-dep-tracker-macos.tar.gz spm-dep-tracker
+./scripts/prepare_homebrew_release.sh --version 0.1.0
 ```
 
-3. Generate the checksum:
+This script:
+
+- builds the release CLI as a universal `arm64` + `x86_64` binary unless `--skip-build` is passed
+- creates `dist/homebrew/v<version>/spm-dep-tracker-macos.tar.gz`
+- computes the SHA-256 checksum
+- rewrites `Formula/spm-dep-tracker.rb` to include both:
+  - a stable release-backed install path
+  - a `head` install path for maintainers
+
+2. Create and push the release tag:
 
 ```bash
-shasum -a 256 spm-dep-tracker-macos.tar.gz
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-4. Create a GitHub release and upload `spm-dep-tracker-macos.tar.gz`.
-5. Update `Formula/spm-dep-tracker.rb`:
-   - replace the release tag in `url`
-   - replace `<REPLACE_WITH_RELEASE_SHA256>` with the archive checksum
-   - replace `<org>` with the real GitHub owner
+3. Create a GitHub release for `v0.1.0` and upload:
 
-## Notes
+```bash
+dist/homebrew/v0.1.0/spm-dep-tracker-macos.tar.gz
+```
 
-- This formula installs the CLI only.
-- The macOS app remains a separate build/install path.
-- CI release automation is intentionally out of scope for now.
+4. Let the release workflow open the stabilization PR for the rewritten formula.
+
+5. Verify the public install path:
+
+```bash
+brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
+brew test AmrMohamad/spm-den-tracker/spm-dep-tracker
+```
+
+## Validation
+
+Local validation before pushing:
+
+```bash
+ruby -c Formula/spm-dep-tracker.rb
+```
+
+For `HEAD` validation, use the same temporary tap strategy as CI:
+
+```bash
+brew install --HEAD AmrMohamad/spm-den-tracker/spm-dep-tracker
+brew test AmrMohamad/spm-den-tracker/spm-dep-tracker
+```
+
+For stable-release validation, the tag workflow validates all of these before publishing the release asset or opening the formula PR:
+
+- archive layout contains only the expected `spm-dep-tracker` binary
+- the archived binary is universal (`arm64` + `x86_64`)
+- the archived binary launches with `--help`
+- a synthetic stable formula that points at the locally built archive installs and passes `brew test`
+
+## Scope
+
+- the formula installs the CLI only
+- `DependencyTrackerApp` stays on the guided installer path
+- if the app eventually needs Homebrew distribution, ship it separately as a cask

@@ -1,0 +1,194 @@
+name: Release Homebrew
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-homebrew-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: "6.2"
+
+      - name: Derive release metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE_NAME="spm-dep-tracker-macos.tar.gz"
+          OUTPUT_DIR="${RUNNER_TEMP}/dist"
+          ARCHIVE_PATH="${OUTPUT_DIR}/v${VERSION}/${ARCHIVE_NAME}"
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "archive_name=${ARCHIVE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "output_dir=${OUTPUT_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "archive_path=${ARCHIVE_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release CLI
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_homebrew_release.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --output-dir "${{ steps.meta.outputs.output_dir }}"
+
+      - name: Validate rewritten formula
+        run: |
+          set -euo pipefail
+          ruby -c Formula/spm-dep-tracker.rb
+          git diff --check
+
+      - name: Validate release archive shape
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
+          tar -tzf "${ARCHIVE_PATH}" | grep -Fx "spm-dep-tracker"
+          EXTRACT_DIR="$(mktemp -d)"
+          tar -xzf "${ARCHIVE_PATH}" -C "${EXTRACT_DIR}"
+          lipo -archs "${EXTRACT_DIR}/spm-dep-tracker" | grep -Eq 'arm64.*x86_64|x86_64.*arm64'
+          "${EXTRACT_DIR}/spm-dep-tracker" --help >/dev/null
+
+      - name: Validate stable formula against local archive
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
+          FORMULA_PATH="$(mktemp)"
+          TAP_DIR="$(mktemp -d)/homebrew-spmdeptracker-stable"
+          mkdir -p "${TAP_DIR}/Formula"
+
+          python3 - <<'PY' "${ARCHIVE_PATH}" "${FORMULA_PATH}"
+          from pathlib import Path
+          import sys
+
+          archive_path = Path(sys.argv[1]).resolve()
+          formula_out = Path(sys.argv[2])
+          content = Path("Formula/spm-dep-tracker.rb").read_text()
+          lines = []
+          for line in content.splitlines():
+              if line.startswith('  url "https://github.com/'):
+                  lines.append(f'  url "file://{archive_path}"')
+              else:
+                  lines.append(line)
+          formula_out.write_text("\n".join(lines) + "\n")
+          PY
+
+          cp "${FORMULA_PATH}" "${TAP_DIR}/Formula/spm-dep-tracker.rb"
+
+          (
+            cd "${TAP_DIR}"
+            git init -b main
+            git config user.name github-actions
+            git config user.email github-actions@users.noreply.github.com
+            git add Formula/spm-dep-tracker.rb
+            git commit -m "Add formula"
+          )
+
+          brew untap local/spmdeptracker-stable >/dev/null 2>&1 || true
+          brew uninstall --force local/spmdeptracker-stable/spm-dep-tracker >/dev/null 2>&1 || true
+          brew tap --custom-remote local/spmdeptracker-stable "file://${TAP_DIR}"
+          brew install local/spmdeptracker-stable/spm-dep-tracker
+          brew test local/spmdeptracker-stable/spm-dep-tracker
+          brew uninstall --force local/spmdeptracker-stable/spm-dep-tracker >/dev/null 2>&1 || true
+          brew untap local/spmdeptracker-stable >/dev/null 2>&1 || true
+
+      - name: Publish GitHub release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="${GITHUB_REF_NAME}"
+          ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
+
+          [[ -f "${ARCHIVE_PATH}" ]] || {
+            echo "Expected archive missing: ${ARCHIVE_PATH}" >&2
+            exit 1
+          }
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; refusing to mutate a versioned Homebrew asset." >&2
+            exit 1
+          fi
+
+          gh release create "${TAG}" "${ARCHIVE_PATH}" \
+            --title "${TAG}" \
+            --notes "Release ${TAG}"
+
+      - name: Open formula stabilization PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          base: main
+          branch: codex/release-formula-v${{ steps.meta.outputs.version }}
+          delete-branch: true
+          commit-message: "[Enhance]: stabilize Homebrew formula for v${{ steps.meta.outputs.version }}"
+          title: Stabilize Homebrew formula for v${{ steps.meta.outputs.version }}
+          body: |
+            ## Summary
+
+            - switch the Homebrew formula from `HEAD`-only to stable+head for `v${{ steps.meta.outputs.version }}`
+            - point the stable install path at the uploaded GitHub release asset
+            - preserve `HEAD` installs for maintainers
+
+            ## Validation
+
+            - generated by `.github/workflows/release-homebrew.yml`
+            - `ruby -c Formula/spm-dep-tracker.rb`
+            - `git diff --check`
+          signoff: false
+
+      - name: Trigger validation for stabilization branch
+        id: validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run homebrew-validate.yml \
+            --ref "codex/release-formula-v${{ steps.meta.outputs.version }}"
+
+          for attempt in $(seq 1 12); do
+            run_id="$(gh run list \
+              --workflow homebrew-validate.yml \
+              --branch "codex/release-formula-v${{ steps.meta.outputs.version }}" \
+              --event workflow_dispatch \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId')"
+
+            if [[ -n "${run_id}" && "${run_id}" != "null" ]]; then
+              echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+              break
+            fi
+
+            sleep 5
+          done
+
+          [[ -n "${run_id:-}" && "${run_id}" != "null" ]] || {
+            echo "Timed out waiting for dispatched validation workflow to appear." >&2
+            exit 1
+          }
+
+      - name: Wait for stabilization branch validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run watch "${{ steps.validation.outputs.run_id }}" --interval 10
+          gh run view "${{ steps.validation.outputs.run_id }}" --exit-status
