@@ -1,12 +1,14 @@
 # Homebrew Release Notes
 
-The end-user target for this repository is:
+The end-user target for this project is:
 
 ```bash
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
-That command is only valid once `Formula/spm-dep-tracker.rb` has a stable `url` and `sha256`.
+That command is only valid once the dedicated tap repo
+`AmrMohamad/homebrew-spm-den-tracker` has a stable `Formula/spm-dep-tracker.rb`
+with a release-backed `url` and `sha256`.
 Homebrew rejects plain installs for `HEAD`-only formulae, and first-time
 installation of `AmrMohamad/spm-den-tracker/spm-dep-tracker` requires a
 dedicated tap repo named `AmrMohamad/homebrew-spm-den-tracker`.
@@ -65,6 +67,12 @@ dist/homebrew/v0.1.0/spm-dep-tracker-macos.tar.gz
 ```bash
 ./scripts/sync_homebrew_tap.sh --version 0.1.0
 ```
+
+This recovery path requires:
+
+- the GitHub release asset for `v0.1.0` to already exist
+- authenticated `gh` access
+- push permission to `AmrMohamad/homebrew-spm-den-tracker`
 
 6. Verify the public install path:
 

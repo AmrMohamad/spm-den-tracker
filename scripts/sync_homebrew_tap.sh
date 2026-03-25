@@ -111,6 +111,11 @@ if [[ -z "${WORK_DIR}" ]]; then
   gh repo clone "${TAP_OWNER}/${TAP_REPO}" "${WORK_DIR}"
 fi
 
+TAP_SLUG="${TAP_REPO}"
+if [[ "${TAP_SLUG}" == homebrew-* ]]; then
+  TAP_SLUG="${TAP_SLUG#homebrew-}"
+fi
+
 cd "${WORK_DIR}"
 git checkout "${TAP_BRANCH}"
 git pull --ff-only origin "${TAP_BRANCH}"
@@ -151,18 +156,19 @@ This tap publishes the Homebrew formula for the CLI distributed from:
 Install:
 
 \`\`\`bash
-brew install ${SOURCE_OWNER}/${SOURCE_REPO}/spm-dep-tracker
+brew install ${TAP_OWNER}/${TAP_SLUG}/spm-dep-tracker
 \`\`\`
 
 After this tap is added once, users can also install by short name:
 
 \`\`\`bash
-brew tap ${SOURCE_OWNER}/${SOURCE_REPO}
+brew tap ${TAP_OWNER}/${TAP_SLUG}
 brew install spm-dep-tracker
 \`\`\`
 
 Maintainers should not edit the formula in this repo by hand. It is generated from
-the upstream release workflow in \`${SOURCE_OWNER}/${SOURCE_REPO}\`.
+the upstream release workflow in \`${SOURCE_OWNER}/${SOURCE_REPO}\`, and manual
+recovery requires authenticated \`gh\` access with push permission to this tap repo.
 EOF
 
 if git diff --quiet; then
