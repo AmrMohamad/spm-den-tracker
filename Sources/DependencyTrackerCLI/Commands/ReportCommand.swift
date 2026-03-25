@@ -7,7 +7,7 @@ struct Report: AsyncParsableCommand {
     /// Declares the command name, summary, and longer discussion text.
     static let configuration = CommandConfiguration(
         commandName: "report",
-        abstract: "Generate a dependency report in table, markdown, or JSON format.",
+        abstract: "Generate a dependency report in table, markdown, JSON, Xcode, or JUnit format.",
         discussion: """
         `report` runs the same analysis pipeline as `doctor` but lets you choose the output format and optionally persist the rendered report to disk.
 
@@ -20,6 +20,8 @@ struct Report: AsyncParsableCommand {
           spm-dep-tracker report MyApp.xcodeproj
           spm-dep-tracker report MyApp.xcodeproj --format markdown
           spm-dep-tracker report MyApp.xcodeproj --format json --output ./Reports/dependencies.json
+          spm-dep-tracker report MyApp.xcodeproj --format xcode
+          spm-dep-tracker report MyApp.xcodeproj --format junit --strict-constraints
 
         Exit codes:
         - `0` when only informational findings were produced
@@ -33,16 +35,20 @@ struct Report: AsyncParsableCommand {
     var projectPath: String
 
     /// Output formatter selected by the user.
-    @Option(name: .long, help: "Select the output format: `table`, `markdown`, or `json`.")
+    @Option(name: .long, help: "Select the output format: `table`, `markdown`, `json`, `xcode`, or `junit`.")
     var format: ReportFormat = .table
 
     /// Optional destination path; when omitted the report is written to standard output.
     @Option(name: .long, help: "Write the rendered report to this file path instead of standard output. Parent directories are created automatically if needed.")
     var output: String?
 
+    /// Promotes declared-constraint findings into actionable failures.
+    @Flag(name: .long, help: "Treat declared-constraint findings as actionable failures.")
+    var strictConstraints = false
+
     /// Runs the command and throws the resulting exit code for ArgumentParser.
     func run() async throws {
-        throw try await Self.execute(projectPath: projectPath, format: format, output: output)
+        throw try await Self.execute(projectPath: projectPath, format: format, output: output, strictConstraints: strictConstraints)
     }
 
     /// Performs the report generation with injectable side effects for CLI tests.
@@ -65,11 +71,13 @@ struct Report: AsyncParsableCommand {
         projectPath: String,
         format: ReportFormat,
         output: String?,
-        context: CLIContext = CLIContext(),
+        strictConstraints: Bool = false,
+        context: CLIContext? = nil,
         write: (String) -> Void = CLIOutput.write,
         writeFile: (String, URL) throws -> Void = CLIOutput.write,
         writeError: (String) -> Void = CLIOutput.writeError
     ) async throws -> ExitCode {
+        let context = context ?? CLIContext(strictConstraints: strictConstraints)
         let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
         let report = try await context.engine.analyze(projectPath: resolvedPath)
         let rendered = context.render(report, format: format)

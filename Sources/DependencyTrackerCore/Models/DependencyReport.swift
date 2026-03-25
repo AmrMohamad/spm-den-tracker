@@ -73,6 +73,73 @@ public enum UpdateType: String, Codable, Hashable, Sendable {
     case major
 }
 
+/// Captures which input source declared a dependency requirement.
+public enum DeclaredRequirementSource: String, Codable, Hashable, Sendable {
+    case packageManifest
+    case xcodeProject
+}
+
+/// Classifies the high-level requirement rule declared for a dependency.
+public enum DeclaredRequirementKind: String, Codable, Hashable, Sendable {
+    case exact
+    case upToNextMajor
+    case upToNextMinor
+    case range
+    case branch
+    case revision
+    case local
+}
+
+/// Summarizes one declared dependency requirement as read from a manifest or Xcode project.
+public struct DeclaredRequirement: Codable, Hashable, Sendable {
+    /// The normalized package identity used to associate the requirement with a resolved pin.
+    public let identity: String
+    /// The source that declared the requirement.
+    public let source: DeclaredRequirementSource
+    /// The kind of requirement that was declared.
+    public let kind: DeclaredRequirementKind
+    /// The inclusive lower bound for version-based requirements when available.
+    public let lowerBound: String?
+    /// The exclusive upper bound for range requirements or mirrored exact bound when useful.
+    public let upperBound: String?
+    /// The branch name, revision, or local path reference when applicable.
+    public let reference: String?
+    /// The source URL or local path recorded alongside the requirement when available.
+    public let location: String?
+    /// A short human-readable representation shown in reports.
+    public let description: String
+
+    /// Creates a declared requirement from normalized parser output.
+    public init(
+        identity: String,
+        source: DeclaredRequirementSource,
+        kind: DeclaredRequirementKind,
+        lowerBound: String? = nil,
+        upperBound: String? = nil,
+        reference: String? = nil,
+        location: String? = nil,
+        description: String
+    ) {
+        self.identity = identity
+        self.source = source
+        self.kind = kind
+        self.lowerBound = lowerBound
+        self.upperBound = upperBound
+        self.reference = reference
+        self.location = location
+        self.description = description
+    }
+}
+
+/// Describes how the resolved pin compares to the newest version already allowed by the declaration.
+public enum ConstraintDriftStatus: String, Codable, Hashable, Sendable {
+    case notApplicable
+    case currentIsLatestAllowed
+    case newerAllowedAvailable
+    case newerExistsOutsideDeclaredRange
+    case declarationUnavailable
+}
+
 /// Explains why an outdated check produced an informational note instead of a clean comparison.
 public enum OutdatedNoteKind: String, Codable, Hashable, Sendable {
     case remoteLookupFailure
@@ -145,12 +212,28 @@ public struct DependencyAnalysis: Codable, Hashable, Sendable {
     public let outdated: OutdatedResult?
     /// The risk class of the dependency's pinning strategy.
     public let strategyRisk: StrategyRisk
+    /// The declared manifest or Xcode-project requirement when one could be discovered.
+    public let declaredRequirement: DeclaredRequirement?
+    /// The drift state between the resolved version and the newest version already permitted.
+    public let constraintDrift: ConstraintDriftStatus
+    /// The newest stable version currently allowed by the declaration when it could be computed.
+    public let latestAllowedVersion: String?
 
     /// Creates the combined analysis row shown by reporters and the app.
-    public init(pin: ResolvedPin, outdated: OutdatedResult?, strategyRisk: StrategyRisk) {
+    public init(
+        pin: ResolvedPin,
+        outdated: OutdatedResult?,
+        strategyRisk: StrategyRisk,
+        declaredRequirement: DeclaredRequirement? = nil,
+        constraintDrift: ConstraintDriftStatus = .declarationUnavailable,
+        latestAllowedVersion: String? = nil
+    ) {
         self.pin = pin
         self.outdated = outdated
         self.strategyRisk = strategyRisk
+        self.declaredRequirement = declaredRequirement
+        self.constraintDrift = constraintDrift
+        self.latestAllowedVersion = latestAllowedVersion
     }
 }
 
@@ -167,6 +250,7 @@ public enum FindingCategory: String, Codable, Hashable, Sendable {
     case schema
     case pinStrategy
     case outdated
+    case declaredConstraint
 }
 
 /// Represents one actionable or informational audit finding.
@@ -179,13 +263,22 @@ public struct Finding: Codable, Hashable, Sendable {
     public let message: String
     /// The recommended follow-up action for the issue.
     public let recommendation: String
+    /// Indicates whether the finding should affect CLI exit codes and JUnit failures.
+    public let isActionable: Bool
 
     /// Creates a finding to include in the final report.
-    public init(severity: Severity, category: FindingCategory, message: String, recommendation: String) {
+    public init(
+        severity: Severity,
+        category: FindingCategory,
+        message: String,
+        recommendation: String,
+        isActionable: Bool? = nil
+    ) {
         self.severity = severity
         self.category = category
         self.message = message
         self.recommendation = recommendation
+        self.isActionable = isActionable ?? (severity != .info)
     }
 }
 
@@ -227,6 +320,6 @@ public struct DependencyReport: Codable, Sendable {
 
     /// Indicates whether the report contains warnings or errors that should influence exit codes.
     public var hasActionableFindings: Bool {
-        findings.contains { $0.severity != .info }
+        findings.contains(where: \.isActionable)
     }
 }

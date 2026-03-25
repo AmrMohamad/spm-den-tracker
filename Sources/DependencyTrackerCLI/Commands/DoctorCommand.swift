@@ -15,6 +15,7 @@ struct Doctor: AsyncParsableCommand {
         - whether `Package.resolved` exists and is tracked by git
         - which schema version the file uses
         - whether dependencies are pinned to version, branch, revision, or local path
+        - which declared dependency rules come from the project or manifest
         - whether newer stable upstream versions are available for version-pinned remote packages
 
         Accepted input forms:
@@ -33,9 +34,13 @@ struct Doctor: AsyncParsableCommand {
     @Argument(help: "Path to an `.xcodeproj`, a directory containing one `.xcodeproj`, or a direct `Package.resolved` file.")
     var projectPath: String
 
+    /// Promotes declared-constraint findings into actionable failures.
+    @Flag(name: .long, help: "Treat declared-constraint findings as actionable failures.")
+    var strictConstraints = false
+
     /// Runs the command and throws the resulting exit code for ArgumentParser.
     func run() async throws {
-        throw try await Self.execute(projectPath: projectPath)
+        throw try await Self.execute(projectPath: projectPath, strictConstraints: strictConstraints)
     }
 
     /// Performs the audit with injectable writers so CLI behavior can be regression tested.
@@ -48,10 +53,12 @@ struct Doctor: AsyncParsableCommand {
     /// - Returns: Exit code `1` when the report contains actionable findings, otherwise `0`.
     static func execute(
         projectPath: String,
-        context: CLIContext = CLIContext(),
+        strictConstraints: Bool = false,
+        context: CLIContext? = nil,
         write: (String) -> Void = CLIOutput.write,
         writeError: (String) -> Void = CLIOutput.writeError
     ) async throws -> ExitCode {
+        let context = context ?? CLIContext(strictConstraints: strictConstraints)
         let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
         let report = try await context.engine.analyze(projectPath: resolvedPath)
         write(context.tableFormatter.format(report))

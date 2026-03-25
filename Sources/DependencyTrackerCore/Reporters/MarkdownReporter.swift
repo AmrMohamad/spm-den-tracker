@@ -28,11 +28,11 @@ public struct MarkdownReporter: ReportFormatter {
         lines.append("")
         lines.append("## Dependencies")
         lines.append("")
-        lines.append("| Package | Current | Latest | Update | Pin State |")
-        lines.append("| --- | --- | --- | --- | --- |")
+        lines.append("| Package | Current | Declared | Allowed | Latest | Update | Pin State |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
 
         for dependency in report.dependencies.sorted(by: { $0.pin.identity < $1.pin.identity }) {
-            lines.append("| \(dependency.pin.identity) | \(dependency.pin.state.displayValue) | \(dependency.outdated?.latestVersion ?? "—") | \(dependency.outdated?.updateType?.rawValue ?? "—") | \(dependency.pin.state.strategyLabel) |")
+            lines.append("| \(dependency.pin.identity) | \(dependency.pin.state.displayValue) | \(dependency.declaredRequirement?.description ?? "—") | \(dependency.latestAllowedVersion ?? "—") | \(dependency.outdated?.latestVersion ?? "—") | \(dependency.outdated?.updateType?.rawValue ?? "—") | \(dependency.pin.state.strategyLabel) |")
         }
 
         return lines.joined(separator: "\n")

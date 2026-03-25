@@ -3,15 +3,23 @@ import Version
 
 /// Checks remote version-pinned dependencies for newer stable semantic tags.
 struct OutdatedChecker: Sendable {
-    /// The git abstraction used to query upstream tags.
-    private let gitClient: GitClientProtocol
+    /// Shared version catalog used to query upstream tags with caching.
+    private let versionCatalog: RemoteVersionCatalog
     /// The maximum number of concurrent remote lookups allowed in one run.
     private let concurrentFetchLimit: Int
 
     /// Creates an outdated checker with a bounded lookup fan-out.
-    init(gitClient: GitClientProtocol, concurrentFetchLimit: Int) {
-        self.gitClient = gitClient
+    init(versionCatalog: RemoteVersionCatalog, concurrentFetchLimit: Int) {
+        self.versionCatalog = versionCatalog
         self.concurrentFetchLimit = max(1, concurrentFetchLimit)
+    }
+
+    /// Convenience initializer used by tests and any direct callers that only have a git client.
+    init(gitClient: GitClientProtocol, concurrentFetchLimit: Int) {
+        self.init(
+            versionCatalog: RemoteVersionCatalog(gitClient: gitClient),
+            concurrentFetchLimit: concurrentFetchLimit
+        )
     }
 
     /// Evaluates all eligible pins and preserves deterministic output ordering.
@@ -70,8 +78,7 @@ struct OutdatedChecker: Sendable {
         }
 
         do {
-            let tags = try await gitClient.remoteTags(for: pin.location)
-            let versions = tags.compactMap(normalizedVersion(fromTag:))
+            let versions = try await versionCatalog.stableVersions(for: pin.location)
             guard let latest = versions.sorted().last else {
                 return OutdatedResult(
                     pin: pin,
@@ -120,22 +127,5 @@ struct OutdatedChecker: Sendable {
                 note: error.localizedDescription
             )
         }
-    }
-
-    /// Converts `git ls-remote --tags` refs into stable semantic versions and discards prereleases.
-    ///
-    /// Annotated refs such as `^{}` are normalized, optional leading `v` prefixes are stripped,
-    /// and prerelease identifiers are ignored so the comparison stays focused on stable releases.
-    private func normalizedVersion(fromTag tag: String) -> Version? {
-        guard let ref = tag.split(separator: "/").last.map(String.init) else {
-            return nil
-        }
-
-        let cleaned = ref.replacingOccurrences(of: "^{}", with: "")
-        let candidate = cleaned.hasPrefix("v") ? String(cleaned.dropFirst()) : cleaned
-        guard let version = Version(tolerant: candidate), version.prereleaseIdentifiers.isEmpty else {
-            return nil
-        }
-        return version
     }
 }

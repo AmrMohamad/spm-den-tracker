@@ -22,11 +22,13 @@ public struct TableReporter: ReportFormatter {
         }
 
         lines.append("")
-        let headers = ["Package", "Current", "Latest", "Update", "Pin State"]
+        let headers = ["Package", "Current", "Declared", "Allowed", "Latest", "Update", "Pin State"]
         let rows = report.dependencies.sorted(by: { $0.pin.identity < $1.pin.identity }).map { dependency in
             [
                 dependency.pin.identity,
                 dependency.pin.state.displayValue,
+                dependency.declaredRequirement?.description ?? "—",
+                dependency.latestAllowedVersion ?? "—",
                 dependency.outdated?.latestVersion ?? "—",
                 dependency.outdated?.updateType?.rawValue ?? "—",
                 dependency.pin.state.strategyLabel,

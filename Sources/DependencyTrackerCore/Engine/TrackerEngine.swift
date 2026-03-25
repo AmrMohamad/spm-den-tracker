@@ -10,18 +10,29 @@ public struct TrackerEngine: Sendable {
     private let schemaChecker: SchemaVersionChecker
     private let gitTrackingAuditor: GitTrackingAuditor
     private let strategyAuditor: RequirementStrategyAuditor
+    private let declaredRequirementLoader: DeclaredRequirementLoader
+    private let declaredConstraintAnalyzer: DeclaredConstraintAnalyzer
     private let outdatedChecker: OutdatedChecker
 
     /// Builds an engine with shared helpers derived from the supplied configuration.
     public init(configuration: TrackerConfiguration) {
         let gitClient = GitClient(timeout: configuration.timeout)
+        let versionCatalog = RemoteVersionCatalog(gitClient: gitClient)
         self.configuration = configuration
         self.locator = XcodeprojLocator()
         self.parser = ResolvedFileParser()
         self.schemaChecker = SchemaVersionChecker()
         self.gitTrackingAuditor = GitTrackingAuditor(gitClient: gitClient)
         self.strategyAuditor = RequirementStrategyAuditor()
-        self.outdatedChecker = OutdatedChecker(gitClient: gitClient, concurrentFetchLimit: configuration.concurrentFetchLimit)
+        self.declaredRequirementLoader = DeclaredRequirementLoader()
+        self.declaredConstraintAnalyzer = DeclaredConstraintAnalyzer(
+            versionCatalog: versionCatalog,
+            strictConstraints: configuration.strictConstraints
+        )
+        self.outdatedChecker = OutdatedChecker(
+            versionCatalog: versionCatalog,
+            concurrentFetchLimit: configuration.concurrentFetchLimit
+        )
     }
 
     /// Runs the full audit pipeline and returns a report suitable for the CLI or app UI.
@@ -38,21 +49,22 @@ public struct TrackerEngine: Sendable {
     /// - Throws: `DependencyTrackerError` when the path cannot be resolved or the file cannot
     ///   be parsed, plus any process-level failures surfaced by the support layer.
     public func analyze(projectPath: String) async throws -> DependencyReport {
-        let resolvedFileURL = try locateResolvedFile(at: projectPath)
-        let fileStatus = try await resolvedFileStatus(for: resolvedFileURL)
+        let auditTarget = try locateAuditTarget(at: projectPath)
+        let fileStatus = try await resolvedFileStatus(for: auditTarget.resolvedFileURL)
 
         guard fileStatus != .missing else {
             let findings = makeFindings(
                 status: fileStatus,
                 schema: nil,
                 strategyFindings: [],
-                outdatedResults: []
+                outdatedResults: [],
+                constraintAssessments: []
             )
 
             return DependencyReport(
                 projectPath: projectPath,
                 generatedAt: Date(),
-                resolvedFilePath: resolvedFileURL.path,
+                resolvedFilePath: auditTarget.resolvedFileURL.path,
                 resolvedFileStatus: fileStatus,
                 schemaVersion: nil,
                 dependencies: [],
@@ -60,33 +72,45 @@ public struct TrackerEngine: Sendable {
             )
         }
 
-        let pins = try parseResolved(at: resolvedFileURL)
-        let schema = try checkSchemaVersion(at: resolvedFileURL)
+        let pins = try parseResolved(at: auditTarget.resolvedFileURL)
+        let schema = try checkSchemaVersion(at: auditTarget.resolvedFileURL)
         let strategyFindings = auditRequirementStrategies(pins)
         let outdated = configuration.checkOutdated ? try await checkOutdated(pins) : []
+        let declaredRequirements = configuration.checkDeclaredConstraints
+            ? try await loadDeclaredRequirements(from: auditTarget)
+            : []
+        let constraintAssessments = configuration.checkDeclaredConstraints
+            ? try await analyzeDeclaredConstraints(pins: pins, declaredRequirements: declaredRequirements)
+            : []
 
         let outdatedByIdentity = Dictionary(uniqueKeysWithValues: outdated.map { ($0.pin.identity, $0) })
         let riskByIdentity = Dictionary(uniqueKeysWithValues: strategyFindings.map { ($0.pin.identity, $0.risk) })
+        let constraintsByIdentity = Dictionary(uniqueKeysWithValues: constraintAssessments.map { ($0.identity, $0) })
 
         let dependencies = pins.map { pin in
-            DependencyAnalysis(
+            let constraint = constraintsByIdentity[pin.identity]
+            return DependencyAnalysis(
                 pin: pin,
                 outdated: outdatedByIdentity[pin.identity],
-                strategyRisk: riskByIdentity[pin.identity] ?? .normal
+                strategyRisk: riskByIdentity[pin.identity] ?? .normal,
+                declaredRequirement: constraint?.declaredRequirement,
+                constraintDrift: constraint?.drift ?? .declarationUnavailable,
+                latestAllowedVersion: constraint?.latestAllowedVersion
             )
-        }.sorted { $0.pin.identity < $1.pin.identity }
+        }.sorted(by: { $0.pin.identity < $1.pin.identity })
 
         let findings = makeFindings(
             status: fileStatus,
             schema: schema,
             strategyFindings: strategyFindings,
-            outdatedResults: outdated
+            outdatedResults: outdated,
+            constraintAssessments: constraintAssessments
         )
 
         return DependencyReport(
             projectPath: projectPath,
             generatedAt: Date(),
-            resolvedFilePath: resolvedFileURL.path,
+            resolvedFilePath: auditTarget.resolvedFileURL.path,
             resolvedFileStatus: fileStatus,
             schemaVersion: schema,
             dependencies: dependencies,
@@ -102,6 +126,11 @@ public struct TrackerEngine: Sendable {
     ///   `DependencyTrackerError.ambiguousProjectPath` when the input cannot be mapped safely.
     public func locateResolvedFile(at path: String) throws -> URL {
         try locator.locateResolvedFile(at: path)
+    }
+
+    /// Resolves a user-supplied path into the richer audit target used by declared-constraint analysis.
+    func locateAuditTarget(at path: String) throws -> AuditTarget {
+        try locator.locateAuditTarget(at: path)
     }
 
     /// Parses the dependencies recorded in a `Package.resolved` file.
@@ -147,6 +176,19 @@ public struct TrackerEngine: Sendable {
         strategyAuditor.audit(pins)
     }
 
+    /// Loads declared dependency requirements from the best available source for the audit target.
+    func loadDeclaredRequirements(from auditTarget: AuditTarget) async throws -> [DeclaredRequirement] {
+        try await declaredRequirementLoader.load(from: auditTarget, timeout: configuration.timeout)
+    }
+
+    /// Compares declared requirements with resolved pins and stable upstream versions.
+    func analyzeDeclaredConstraints(
+        pins: [ResolvedPin],
+        declaredRequirements: [DeclaredRequirement]
+    ) async throws -> [ConstraintAssessment] {
+        try await declaredConstraintAnalyzer.analyze(pins: pins, declared: declaredRequirements)
+    }
+
     /// Converts raw audit outputs into sorted, user-facing findings.
     ///
     /// The engine intentionally centralizes finding assembly here so the CLI, markdown reporter,
@@ -156,7 +198,8 @@ public struct TrackerEngine: Sendable {
         status: ResolvedFileStatus,
         schema: SchemaInfo?,
         strategyFindings: [StrategyFinding],
-        outdatedResults: [OutdatedResult]
+        outdatedResults: [OutdatedResult],
+        constraintAssessments: [ConstraintAssessment]
     ) -> [Finding] {
         var findings: [Finding] = []
 
@@ -229,6 +272,8 @@ public struct TrackerEngine: Sendable {
             }
         }
 
+        findings.append(contentsOf: constraintAssessments.compactMap(\.finding))
+
         return findings.sorted(by: findingSort)
     }
 
@@ -296,7 +341,7 @@ public struct TrackerEngine: Sendable {
     /// stable across runs with the same underlying data.
     private func findingSort(lhs: Finding, rhs: Finding) -> Bool {
         let severityOrder: [Severity: Int] = [.error: 0, .warning: 1, .info: 2]
-        let categoryOrder: [FindingCategory: Int] = [.gitTracking: 0, .schema: 1, .pinStrategy: 2, .outdated: 3]
+        let categoryOrder: [FindingCategory: Int] = [.gitTracking: 0, .schema: 1, .pinStrategy: 2, .declaredConstraint: 3, .outdated: 4]
         let lhsSeverity = severityOrder[lhs.severity] ?? 99
         let rhsSeverity = severityOrder[rhs.severity] ?? 99
         if lhsSeverity != rhsSeverity {
