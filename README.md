@@ -15,6 +15,8 @@ The repository currently ships three deliverables:
 - `spm-dep-tracker`: the command-line tool for local workflows and CI
 - `DependencyTrackerApp`: a macOS AppKit app for interactive inspection and export
 
+For AI-assisted workflows, the repo also includes local skill definitions for Codex and Claude Code so agents can use the CLI with the same input rules, command selection, and exit-code expectations documented in the source tree.
+
 ## What The Audit Covers
 
 For a given Xcode project or `Package.resolved`, the engine assembles one dependency report with:
@@ -191,6 +193,26 @@ Use it when you want drift between declared requirements and resolved versions t
 - `xcode`: compiler-style warning and error lines for Xcode and CI logs
 - `junit`: XML suite with actionable findings surfaced as failures
 
+## Agent Skills
+
+The repository ships repo-local CLI skills for both supported agent layouts:
+
+- Codex: [`.agent/skills/spm-dep-tracker-cli/SKILL.md`](.agent/skills/spm-dep-tracker-cli/SKILL.md)
+- Claude Code: [`.claude/skills/spm-dep-tracker-cli/SKILL.md`](.claude/skills/spm-dep-tracker-cli/SKILL.md)
+
+Each skill teaches the agent to:
+
+- work from the repository root
+- accept only a direct `.xcodeproj`, a directory with exactly one immediate `.xcodeproj`, or a direct `Package.resolved`
+- choose `doctor`, `report`, or `check-tracking` based on the narrowest user need
+- use `--strict-constraints` only when declared-constraint drift should affect failures
+- surface the correct exit codes when explaining results
+
+Each skill also includes a local CLI cookbook with ready-to-run command examples, output-format guidance, build/test commands, and installer usage:
+
+- Codex cookbook: [`.agent/skills/spm-dep-tracker-cli/references/cli-cookbook.md`](.agent/skills/spm-dep-tracker-cli/references/cli-cookbook.md)
+- Claude cookbook: [`.claude/skills/spm-dep-tracker-cli/references/cli-cookbook.md`](.claude/skills/spm-dep-tracker-cli/references/cli-cookbook.md)
+
 ## macOS App
 
 `DependencyTrackerApp` is a local AppKit wrapper around the same core engine.
@@ -236,6 +258,8 @@ Repository structure:
 - `Sources/DependencyTrackerCore/`: audit engine, parsers, analyzers, reporters, and support types
 - `Sources/DependencyTrackerCLI/`: ArgumentParser-based CLI commands and formatting glue
 - `DependencyTrackerApp/`: AppKit app target and view-model layer
+- `.agent/skills/spm-dep-tracker-cli/`: Codex skill and cookbook for repo-local CLI usage
+- `.claude/skills/spm-dep-tracker-cli/`: Claude Code skill and cookbook for repo-local CLI usage
 - `Tests/`: CLI and core regression tests
 - `Formula/`: Homebrew formula used for release packaging
 - `docs/`: release notes and maintenance docs
