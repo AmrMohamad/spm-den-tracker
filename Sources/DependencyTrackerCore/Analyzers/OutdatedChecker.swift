@@ -79,7 +79,7 @@ struct OutdatedChecker: Sendable {
 
         do {
             let versions = try await versionCatalog.stableVersions(for: pin.location)
-            guard let latest = versions.sorted().last else {
+            guard let latest = versions.last else {
                 return OutdatedResult(
                     pin: pin,
                     latestVersion: nil,

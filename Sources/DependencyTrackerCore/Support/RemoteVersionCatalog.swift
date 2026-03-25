@@ -13,7 +13,7 @@ actor RemoteVersionCatalog {
         self.gitClient = gitClient
     }
 
-    /// Returns all stable semantic versions known for the supplied location.
+    /// Returns all stable semantic versions known for the supplied location, sorted ascending and deduplicated.
     func stableVersions(for location: String) async throws -> [Version] {
         let key = DependencyIdentityNormalizer.canonicalLocation(location)
         if let cached = cache[key] {
@@ -21,7 +21,7 @@ actor RemoteVersionCatalog {
         }
 
         let tags = try await gitClient.remoteTags(for: location)
-        let versions = tags.compactMap(normalizedVersion(fromTag:)).sorted()
+        let versions = Array(Set(tags.compactMap(normalizedVersion(fromTag:)))).sorted()
         cache[key] = versions
         return versions
     }

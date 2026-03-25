@@ -39,6 +39,7 @@ struct ProcessRunner: ProcessRunning {
     ///   `Process.run()` failure when launch itself fails.
     func run(arguments: [String], currentDirectoryURL: URL?, timeout: TimeInterval) async throws -> ProcessResult {
         precondition(!arguments.isEmpty, "Process arguments must not be empty")
+        let timeoutNanoseconds = try validatedTimeoutNanoseconds(for: timeout)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -58,7 +59,12 @@ struct ProcessRunner: ProcessRunning {
 
             async let stdoutData = collect(from: stdoutStream)
             async let stderrData = collect(from: stderrStream)
-            let status = try await waitForExit(of: process, command: arguments, timeout: timeout)
+            let status = try await waitForExit(
+                of: process,
+                command: arguments,
+                timeout: timeout,
+                timeoutNanoseconds: timeoutNanoseconds
+            )
             let stdout = String(decoding: try await stdoutData, as: UTF8.self)
             let stderr = String(decoding: try await stderrData, as: UTF8.self)
 
@@ -74,7 +80,12 @@ struct ProcessRunner: ProcessRunning {
     ///
     /// The task group races a termination callback against a timed sleep. Whichever finishes first
     /// wins, and the other branch is cancelled so the caller gets a single, well-defined outcome.
-    private func waitForExit(of process: Process, command: [String], timeout: TimeInterval) async throws -> Int32 {
+    private func waitForExit(
+        of process: Process,
+        command: [String],
+        timeout: TimeInterval,
+        timeoutNanoseconds: UInt64
+    ) async throws -> Int32 {
         let terminationStream = AsyncStream<Int32> { continuation in
             process.terminationHandler = { process in
                 continuation.yield(process.terminationStatus)
@@ -90,7 +101,7 @@ struct ProcessRunner: ProcessRunning {
                 throw CancellationError()
             }
             group.addTask {
-                try await Task.sleep(nanoseconds: timeoutNanoseconds(for: timeout))
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
                 throw DependencyTrackerError.commandTimedOut(command: command, timeout: timeout)
             }
 
@@ -145,7 +156,16 @@ struct ProcessRunner: ProcessRunning {
     /// Converts a timeout interval into the nanoseconds expected by `Task.sleep`.
     ///
     /// The timeout rounds up so fractional seconds never produce a zero-duration sleep.
-    private func timeoutNanoseconds(for timeout: TimeInterval) -> UInt64 {
-        UInt64((timeout * 1_000_000_000).rounded(.up))
+    private func validatedTimeoutNanoseconds(for timeout: TimeInterval) throws -> UInt64 {
+        guard timeout.isFinite, timeout > 0 else {
+            throw DependencyTrackerError.invalidTimeout(timeout)
+        }
+
+        let nanoseconds = timeout * 1_000_000_000
+        guard nanoseconds < Double(UInt64.max) else {
+            throw DependencyTrackerError.invalidTimeout(timeout)
+        }
+
+        return UInt64(nanoseconds.rounded(.up))
     }
 }

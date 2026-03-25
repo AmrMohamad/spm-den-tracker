@@ -121,6 +121,60 @@ struct AnalyzerTests {
         #expect(result?.noteKind == .remoteLookupFailure)
         #expect(result?.note != nil)
     }
+
+    @Test
+    func remoteVersionCatalogReturnsUniqueAscendingVersions() async throws {
+        let client = StubGitClient(tags: [
+            "https://example.com/sdk.git": [
+                "refs/tags/v1.4.0",
+                "refs/tags/v1.4.0^{}",
+                "refs/tags/v1.2.3",
+                "refs/tags/v2.0.0-beta.1",
+            ]
+        ])
+        let catalog = RemoteVersionCatalog(gitClient: client)
+
+        let versions = try await catalog.stableVersions(for: "https://example.com/sdk.git")
+
+        #expect(versions.map(\.description) == ["1.2.3", "1.4.0"])
+    }
+
+    @Test
+    func declaredConstraintAnalyzerHonorsConcurrentFetchLimit() async throws {
+        let gitClient = ConcurrencyTrackingGitClient(
+            tags: ["refs/tags/v1.0.0", "refs/tags/v1.1.0"],
+            delayNanoseconds: 200_000_000
+        )
+        let analyzer = DeclaredConstraintAnalyzer(
+            versionCatalog: RemoteVersionCatalog(gitClient: gitClient),
+            strictConstraints: false,
+            concurrentFetchLimit: 2
+        )
+        let pins = (0..<6).map { index in
+            ResolvedPin(
+                identity: "pkg\(index)",
+                kind: .remoteSourceControl,
+                location: "https://example.com/pkg\(index).git",
+                state: .version("1.0.0", revision: "rev\(index)")
+            )
+        }
+        let declared = pins.map { pin in
+            DeclaredRequirement(
+                identity: pin.identity,
+                source: .packageManifest,
+                kind: .exact,
+                lowerBound: "1.0.0",
+                upperBound: "1.0.0",
+                location: pin.location,
+                description: "exact 1.0.0"
+            )
+        }
+
+        let assessments = try await analyzer.analyze(pins: pins, declared: declared)
+
+        #expect(assessments.count == 6)
+        #expect(await gitClient.maxObservedConcurrency <= 2)
+    }
 }
 
 private struct StubGitClient: GitClientProtocol {
@@ -141,5 +195,52 @@ private struct StubGitClient: GitClientProtocol {
             throw DependencyTrackerError.commandFailed(command: ["git", "ls-remote", "--tags", location], status: 1, stderr: "network failed")
         }
         return tags[location] ?? []
+    }
+}
+
+private final class ConcurrencyTrackingGitClient: @unchecked Sendable, GitClientProtocol {
+    private let tags: [String]
+    private let delayNanoseconds: UInt64
+    private let state = ConcurrencyTrackingState()
+
+    init(tags: [String], delayNanoseconds: UInt64) {
+        self.tags = tags
+        self.delayNanoseconds = delayNanoseconds
+    }
+
+    func repositoryRoot(containing path: URL) async throws -> URL? { nil }
+    func isTracked(filePath: URL, repositoryRoot: URL) async throws -> Bool { false }
+    func checkIgnore(filePath: URL, repositoryRoot: URL) async throws -> GitIgnoreMatch? { nil }
+
+    func remoteTags(for location: String) async throws -> [String] {
+        await state.beginCall()
+        do {
+            try await Task.sleep(nanoseconds: delayNanoseconds)
+            await state.endCall()
+            return tags
+        } catch {
+            await state.endCall()
+            throw error
+        }
+    }
+
+    var maxObservedConcurrency: Int {
+        get async {
+            await state.maxObservedConcurrency
+        }
+    }
+}
+
+private actor ConcurrencyTrackingState {
+    private var activeCalls = 0
+    private(set) var maxObservedConcurrency = 0
+
+    func beginCall() {
+        activeCalls += 1
+        maxObservedConcurrency = max(maxObservedConcurrency, activeCalls)
+    }
+
+    func endCall() {
+        activeCalls -= 1
     }
 }
