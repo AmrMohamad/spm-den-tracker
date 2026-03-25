@@ -96,6 +96,7 @@ For stable-release validation, the tag workflow validates all of these before pu
 - the archived binary is universal (`arm64` + `x86_64`)
 - the archived binary launches with `--help`
 - a synthetic stable formula that points at the locally built archive installs and passes `brew test`
+- the dedicated tap sync path renders a formula from the published release checksum rather than from a local build, so reruns and manual recovery use the immutable release asset
 
 ## Scope
 

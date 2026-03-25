@@ -56,7 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           ruby -c "${{ steps.meta.outputs.formula_path }}"
-          git diff --check
+          grep -q '^  url "' "${{ steps.meta.outputs.formula_path }}"
+          grep -q '^  sha256 "' "${{ steps.meta.outputs.formula_path }}"
 
       - name: Validate release archive shape
         run: |

@@ -101,6 +101,7 @@ require_command() {
 
 require_command git
 require_command gh
+require_command ruby
 
 parse_args "$@"
 [[ -n "${VERSION}" ]] || fail "--version is required"
@@ -118,13 +119,26 @@ git config user.email github-actions@users.noreply.github.com
 
 mkdir -p "$(dirname "${FORMULA_RELATIVE_PATH}")"
 
+DOWNLOAD_DIR="$(mktemp -d)"
+gh release download "v${VERSION}" \
+  --repo "${SOURCE_OWNER}/${SOURCE_REPO}" \
+  --pattern "${ARCHIVE_NAME}" \
+  --dir "${DOWNLOAD_DIR}"
+
+ARCHIVE_PATH="${DOWNLOAD_DIR}/${ARCHIVE_NAME}"
+[[ -f "${ARCHIVE_PATH}" ]] || fail "Downloaded release archive not found at ${ARCHIVE_PATH}"
+SHA256="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
+
 bash "${REPO_ROOT}/scripts/prepare_homebrew_release.sh" \
   --version "${VERSION}" \
   --owner "${SOURCE_OWNER}" \
   --repo "${SOURCE_REPO}" \
   --archive-name "${ARCHIVE_NAME}" \
   --skip-build \
+  --sha256 "${SHA256}" \
   --formula-out "${WORK_DIR}/${FORMULA_RELATIVE_PATH}"
+
+ruby -c "${WORK_DIR}/${FORMULA_RELATIVE_PATH}"
 
 cat > "${WORK_DIR}/${README_RELATIVE_PATH}" <<EOF
 # Homebrew Tap for \`spm-dep-tracker\`
