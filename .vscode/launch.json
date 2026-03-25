@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:spm-den-tracker}",
+            "name": "Debug spm-dep-tracker",
+            "target": "spm-dep-tracker",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug spm-dep-tracker"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:spm-den-tracker}",
+            "name": "Release spm-dep-tracker",
+            "target": "spm-dep-tracker",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release spm-dep-tracker"
+        }
+    ]
+}
