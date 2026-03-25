@@ -1,14 +1,18 @@
 class SpmDepTracker < Formula
   desc "Audit Swift Package Manager lockfiles, pinning strategy, schema, and update drift"
-  homepage "https://github.com/<org>/spm-den-tracker"
-  url "https://github.com/<org>/spm-den-tracker/releases/download/v0.1.0/spm-dep-tracker-macos.tar.gz"
-  sha256 "<REPLACE_WITH_RELEASE_SHA256>"
-  license "MIT"
+  homepage "https://github.com/AmrMohamad/spm-den-tracker"
+  head "https://github.com/AmrMohamad/spm-den-tracker.git", branch: "main"
 
-  depends_on macos: :ventura
+  depends_on xcode: ["16.0", :build]
+  depends_on macos: :sonoma
 
   def install
-    bin.install "spm-dep-tracker"
+    system "swift", "build",
+      "--configuration", "release",
+      "--product", "spm-dep-tracker",
+      "--disable-sandbox"
+
+    bin.install ".build/release/spm-dep-tracker"
   end
 
   test do
