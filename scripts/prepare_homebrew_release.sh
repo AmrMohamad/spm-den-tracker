@@ -228,7 +228,7 @@ class SpmDepTracker < Formula
   version "${version}"
   head "${head_url}", branch: "main"
 
-  depends_on xcode: ["16.0", :build]
+  depends_on xcode: ["16.0", :build] if build.head?
   depends_on macos: :sonoma
 
   def install

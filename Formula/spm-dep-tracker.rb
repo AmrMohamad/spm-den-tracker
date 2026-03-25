@@ -3,7 +3,7 @@ class SpmDepTracker < Formula
   homepage "https://github.com/AmrMohamad/spm-den-tracker"
   head "https://github.com/AmrMohamad/spm-den-tracker.git", branch: "main"
 
-  depends_on xcode: ["16.0", :build]
+  depends_on xcode: ["16.0", :build] if build.head?
   depends_on macos: :sonoma
 
   def install

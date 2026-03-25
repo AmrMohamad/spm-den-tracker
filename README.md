@@ -117,7 +117,7 @@ Run `./scripts/install_dependency_tracker_app.sh --help` for the full installer 
 
 ### Homebrew
 
-The repository now includes a Homebrew formula for the CLI at [Formula/spm-dep-tracker.rb](/Users/amrmohamad/Developer/spm-den-tracker/Formula/spm-dep-tracker.rb).
+The repository now includes a Homebrew formula for the CLI at [Formula/spm-dep-tracker.rb](Formula/spm-dep-tracker.rb).
 
 Best-practice install target:
 
@@ -132,7 +132,7 @@ Current repository state:
 - the checked-in formula is still `HEAD`-only until a stable release archive is published
 - `DependencyTrackerApp` remains outside the formula and continues to use the guided installer
 - maintainers can prepare the stable formula inputs with `./scripts/prepare_homebrew_release.sh --version <x.y.z>`
-- the tag workflow at [release-homebrew.yml](/Users/amrmohamad/Developer/spm-den-tracker/.github/workflows/release-homebrew.yml) publishes the CLI archive and opens the formula stabilization PR automatically
+- the tag workflow at [release-homebrew.yml](.github/workflows/release-homebrew.yml) publishes the CLI archive and opens the formula stabilization PR automatically
 - the release archive is validated as a universal `arm64` + `x86_64` binary before the workflow publishes it
 
 Until the first stable Homebrew release is published, maintainers can still install the CLI from source with:
@@ -147,7 +147,7 @@ After the stable release is published, users should prefer:
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
-Release maintenance details live in [release-homebrew.md](/Users/amrmohamad/Developer/spm-den-tracker/docs/release-homebrew.md).
+Release maintenance details live in [release-homebrew.md](docs/release-homebrew.md).
 
 ## CLI Reference
 

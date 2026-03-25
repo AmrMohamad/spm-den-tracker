@@ -17,8 +17,8 @@ Homebrew rejects plain installs for `HEAD`-only formulae.
 - validate the formula in CI using a temporary local tap before merging changes
 - treat release assets as immutable for a given version; reruns must fail instead of overwriting the published archive
 
-This repo already includes that CI check in [homebrew-validate.yml](/Users/amrmohamad/Developer/spm-den-tracker/.github/workflows/homebrew-validate.yml).
-The tag-driven release path is implemented in [release-homebrew.yml](/Users/amrmohamad/Developer/spm-den-tracker/.github/workflows/release-homebrew.yml).
+This repo already includes that CI check in [homebrew-validate.yml](../.github/workflows/homebrew-validate.yml).
+The tag-driven release path is implemented in [release-homebrew.yml](../.github/workflows/release-homebrew.yml).
 
 ## Maintainer Flow
 
