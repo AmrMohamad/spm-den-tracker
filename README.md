@@ -158,6 +158,28 @@ is a future `homebrew/core` goal, not something a custom tap can provide on a fr
 
 Release maintenance details live in [release-homebrew.md](docs/release-homebrew.md), and future core-submission prep lives in [homebrew-core-readiness.md](docs/homebrew-core-readiness.md).
 
+#### Tag-Push Automation
+
+Install the tracked git hooks once per clone:
+
+```bash
+make setup-hooks
+```
+
+After that, pushing a release tag such as `v0.1.0` from either the terminal or Fork runs a local preflight before the tag is sent to GitHub:
+
+- the hook detects pushed `v*` tags only
+- release inputs are rendered to temporary paths, not the repo
+- successful preflights are cached under `.git/release-preflight-cache/`
+- the remote `release-homebrew.yml` workflow still handles the actual GitHub release and tap sync after the tag arrives on GitHub
+
+Creating a tag locally does not trigger anything by itself; the automation boundary is tag push.
+
+Emergency bypasses:
+
+- `git push --no-verify origin v0.1.0`
+- `SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT=1 git push origin v0.1.0`
+
 ## CLI Reference
 
 ### `doctor`

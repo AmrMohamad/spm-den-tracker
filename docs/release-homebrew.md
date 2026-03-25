@@ -30,6 +30,14 @@ The PR validation workflow intentionally treats `HEAD` formulas differently from
 - stable formulas are installed and tested through a temporary local tap
 - `HEAD` formulas are syntax-checked only on GitHub-hosted runners because the current runner toolchain (`Swift 6.2.3` on `Xcode 26.2`) fails inside `swift-argument-parser`, which would make maintainer-only `HEAD` validation an unreliable merge blocker
 
+## One-Time Local Setup
+
+If you want automatic local release preflight from the terminal or Fork, run this once per clone:
+
+```bash
+make setup-hooks
+```
+
 ## Maintainer Flow
 
 1. Prepare the release artifact and render the tap formula:
@@ -54,15 +62,20 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-3. Create a GitHub release for `v0.1.0` and upload:
+If you push the tag from Fork instead of the terminal, the same tracked `pre-push`
+hook runs first as long as you have already run `make setup-hooks`.
+The hook:
 
-```bash
-dist/homebrew/v0.1.0/spm-dep-tracker-macos.tar.gz
-```
+- validates the release archive and rendered formula using temporary paths only
+- blocks the push with a concise error summary when validation fails
+- caches successful validations under `.git/release-preflight-cache/` so re-pushing the same tag after a network hiccup does not rebuild everything
 
-4. Let the release workflow sync the dedicated tap repo using the `HOMEBREW_TAP_TOKEN` secret.
+Creating the tag locally does not trigger anything by itself; the local
+automation boundary is the tag push.
 
-5. If you need to recover or backfill the dedicated tap manually after the release asset exists:
+3. Let the tag workflow create the GitHub release asset and sync the dedicated tap repo using the `HOMEBREW_TAP_TOKEN` secret.
+
+4. If you need to recover or backfill the dedicated tap manually after the release asset exists:
 
 ```bash
 ./scripts/sync_homebrew_tap.sh --version 0.1.0
@@ -74,7 +87,7 @@ This recovery path requires:
 - authenticated `gh` access
 - push permission to `AmrMohamad/homebrew-spm-den-tracker`
 
-6. Verify the public install path:
+5. Verify the public install path:
 
 ```bash
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
@@ -89,6 +102,19 @@ Local validation before pushing:
 ruby -c Formula/spm-dep-tracker.rb
 bash scripts/prepare_homebrew_release.sh --version 0.1.0 --formula-out /tmp/spm-dep-tracker.rb --output-dir /tmp/homebrew
 ruby -c /tmp/spm-dep-tracker.rb
+```
+
+One-time Fork smoke test:
+
+1. Run `make setup-hooks`
+2. Push a test tag from Fork
+3. Confirm Fork surfaces the hook output before the push completes
+
+If you need to bypass the local preflight in an emergency:
+
+```bash
+git push --no-verify origin v0.1.0
+SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT=1 git push origin v0.1.0
 ```
 
 For `HEAD` validation, use the same temporary tap strategy as CI:

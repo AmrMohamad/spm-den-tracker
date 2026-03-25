@@ -3,7 +3,7 @@ XCODEBUILD ?= xcodebuild
 APP_PROJECT := DependencyTrackerApp/DependencyTrackerApp.xcodeproj
 APP_SCHEME := DependencyTrackerApp
 
-.PHONY: build test run app-build
+.PHONY: build test run app-build setup-hooks
 
 build:
 	$(SWIFT) build
@@ -16,3 +16,7 @@ run:
 
 app-build:
 	$(XCODEBUILD) -project $(APP_PROJECT) -scheme $(APP_SCHEME) -configuration Debug build
+
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "Configured git hooks path to .githooks"

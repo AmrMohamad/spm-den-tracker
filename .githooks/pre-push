@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "${SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT:-0}" == "1" ]]; then
+  exit 0
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PREFLIGHT_SCRIPT="${REPO_ROOT}/scripts/release_tag_preflight.sh"
+
+if [[ ! -x "${PREFLIGHT_SCRIPT}" ]]; then
+  printf 'Release preflight failed: missing executable %s\n' "${PREFLIGHT_SCRIPT}" >&2
+  exit 1
+fi
+
+tags=""
+
+while read -r local_ref _local_sha _remote_ref _remote_sha; do
+  [[ -n "${local_ref:-}" ]] || continue
+
+  case "${local_ref}" in
+    refs/tags/v*)
+      tag_name="${local_ref#refs/tags/}"
+      if ! printf '%s\n' "${tags}" | grep -qxF "${tag_name}"; then
+        tags="${tags}${tag_name}
+"
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "${tags}" ]]; then
+  exit 0
+fi
+
+while IFS= read -r tag_name; do
+  [[ -n "${tag_name}" ]] || continue
+  printf 'Running release preflight for %s\n' "${tag_name}" >&2
+  "${PREFLIGHT_SCRIPT}" --tag "${tag_name}"
+done <<EOF
+${tags}
+EOF

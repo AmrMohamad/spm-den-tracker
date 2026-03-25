@@ -139,7 +139,7 @@ parse_args() {
 
 validate_inputs() {
   [[ -n "${VERSION}" ]] || fail "--version is required"
-  [[ "${VERSION}" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || fail "Version must look like x.y or x.y.z"
+  [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version must look like x.y.z"
 }
 
 build_cli_if_needed() {
@@ -287,10 +287,9 @@ print_next_steps() {
   log "Next steps:"
   if [[ -n "${archive_path}" ]]; then
     log "  1. Create and push tag v${version}."
-    log "  2. Create a GitHub release for v${version}."
-    log "  3. Upload $(basename "${archive_path}") to that release."
-    log "  4. Publish the rendered formula to the dedicated tap repo."
-    log "  5. Users install with: brew install ${owner}/${repo}/spm-dep-tracker"
+    log "  2. Let the tag workflow publish $(basename "${archive_path}") to the GitHub release."
+    log "  3. Let the tag workflow sync the dedicated tap repo, or run scripts/sync_homebrew_tap.sh for manual recovery."
+    log "  4. Users install with: brew install ${owner}/${repo}/spm-dep-tracker"
   else
     log "  1. Publish the rendered formula to the dedicated tap repo."
     log "  2. Users install with: brew install ${owner}/${repo}/spm-dep-tracker"
