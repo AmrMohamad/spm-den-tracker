@@ -14,10 +14,14 @@ final class DependenciesTableView: NSScrollView {
         super.init(frame: frameRect)
         borderType = .bezelBorder
         hasVerticalScroller = true
+        hasHorizontalScroller = true
         autohidesScrollers = true
+        let tableWidth = setupColumns()
+        tableView.frame = NSRect(x: 0, y: 0, width: tableWidth, height: 1)
         documentView = tableView
-        setupColumns()
+        tableView.headerView = NSTableHeaderView()
         tableView.usesAlternatingRowBackgroundColors = true
+        tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         tableView.delegate = self
         tableView.dataSource = self
     }
@@ -35,12 +39,24 @@ final class DependenciesTableView: NSScrollView {
     }
 
     /// Installs the fixed column set used by the dependency table.
-    private func setupColumns() {
+    @discardableResult
+    private func setupColumns() -> CGFloat {
+        var totalWidth: CGFloat = 0
         addColumn(identifier: "package", title: "Package", width: 220)
+        totalWidth += 220
         addColumn(identifier: "current", title: "Current", width: 120)
+        totalWidth += 120
+        addColumn(identifier: "declared", title: "Declared", width: 180)
+        totalWidth += 180
+        addColumn(identifier: "allowed", title: "Allowed", width: 110)
+        totalWidth += 110
         addColumn(identifier: "latest", title: "Latest", width: 120)
+        totalWidth += 120
         addColumn(identifier: "update", title: "Update", width: 90)
+        totalWidth += 90
         addColumn(identifier: "pin", title: "Pin", width: 120)
+        totalWidth += 120
+        return totalWidth
     }
 
     /// Adds one configured column to the backing table view.
@@ -67,6 +83,10 @@ extension DependenciesTableView: NSTableViewDataSource, NSTableViewDelegate {
         switch identifier.rawValue {
         case "current":
             text = dependency.pin.state.displayValue
+        case "declared":
+            text = dependency.declaredRequirement?.description ?? "—"
+        case "allowed":
+            text = dependency.latestAllowedVersion ?? "—"
         case "latest":
             text = dependency.outdated?.latestVersion ?? "—"
         case "update":
@@ -79,6 +99,62 @@ extension DependenciesTableView: NSTableViewDataSource, NSTableViewDelegate {
 
         let cell = NSTextField(labelWithString: text)
         cell.lineBreakMode = .byTruncatingTail
+        if identifier.rawValue == "update" || identifier.rawValue == "pin" {
+            cell.textColor = color(for: dependency)
+        }
         return cell
+    }
+
+    /// Applies a light risk tint to rows so risky updates are easier to scan.
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let rowView = NSTableRowView()
+        rowView.backgroundColor = backgroundColor(for: dependencies[row])
+        return rowView
+    }
+
+    /// Colors cell text to reinforce update severity and pin risk.
+    private func color(for dependency: DependencyAnalysis) -> NSColor {
+        switch dependency.outdated?.updateType {
+        case .major:
+            return .systemRed
+        case .minor:
+            return .systemOrange
+        case .patch:
+            return .systemYellow
+        case nil:
+            break
+        }
+
+        switch dependency.strategyRisk {
+        case .environmentSensitive:
+            return .systemRed
+        case .elevated:
+            return .systemOrange
+        case .normal:
+            return .labelColor
+        }
+    }
+
+    /// Returns the row background color associated with the dependency risk.
+    private func backgroundColor(for dependency: DependencyAnalysis) -> NSColor {
+        switch dependency.outdated?.updateType {
+        case .major:
+            return .systemRed.withAlphaComponent(0.08)
+        case .minor:
+            return .systemOrange.withAlphaComponent(0.08)
+        case .patch:
+            return .systemYellow.withAlphaComponent(0.05)
+        case nil:
+            break
+        }
+
+        switch dependency.strategyRisk {
+        case .environmentSensitive:
+            return .systemRed.withAlphaComponent(0.08)
+        case .elevated:
+            return .systemOrange.withAlphaComponent(0.08)
+        case .normal:
+            return .clear
+        }
     }
 }

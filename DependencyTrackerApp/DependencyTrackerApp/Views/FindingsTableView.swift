@@ -14,10 +14,14 @@ final class FindingsTableView: NSScrollView {
         super.init(frame: frameRect)
         borderType = .bezelBorder
         hasVerticalScroller = true
+        hasHorizontalScroller = true
         autohidesScrollers = true
+        let tableWidth = setupColumns()
+        tableView.frame = NSRect(x: 0, y: 0, width: tableWidth, height: 1)
         documentView = tableView
-        setupColumns()
+        tableView.headerView = NSTableHeaderView()
         tableView.usesAlternatingRowBackgroundColors = true
+        tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         tableView.delegate = self
         tableView.dataSource = self
     }
@@ -35,11 +39,18 @@ final class FindingsTableView: NSScrollView {
     }
 
     /// Installs the fixed column set used by the findings table.
-    private func setupColumns() {
+    @discardableResult
+    private func setupColumns() -> CGFloat {
+        var totalWidth: CGFloat = 0
         addColumn(identifier: "severity", title: "Severity", width: 80)
+        totalWidth += 80
         addColumn(identifier: "category", title: "Category", width: 110)
+        totalWidth += 110
         addColumn(identifier: "message", title: "Message", width: 360)
+        totalWidth += 360
         addColumn(identifier: "recommendation", title: "Recommendation", width: 360)
+        totalWidth += 360
+        return totalWidth
     }
 
     /// Adds one configured column to the backing table view.

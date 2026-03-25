@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import DependencyTrackerCore
+import UniformTypeIdentifiers
 
 @MainActor
 /// Builds the AppKit interface and binds it to `TrackerViewModel`.
@@ -24,6 +25,8 @@ final class MainWindowController: NSWindowController {
     private let progressIndicator = NSProgressIndicator()
     /// Inline error label used for validation and runtime failures.
     private let errorLabel = NSTextField(labelWithString: "")
+    /// Summary label shown above the tables.
+    private let summaryLabel = NSTextField(labelWithString: "No report loaded.")
     /// Table that renders report findings.
     private let findingsTableView = FindingsTableView()
     /// Table that renders dependency rows.
@@ -40,6 +43,8 @@ final class MainWindowController: NSWindowController {
             defer: false
         )
         window.title = "SPM Dependency Tracker"
+        window.minSize = NSSize(width: 960, height: 720)
+        window.center()
         super.init(window: window)
         shouldCascadeWindows = true
         setupUI()
@@ -58,6 +63,8 @@ final class MainWindowController: NSWindowController {
 
         let rootStack = NSStackView()
         rootStack.orientation = .vertical
+        rootStack.alignment = .width
+        rootStack.distribution = .fill
         rootStack.spacing = 12
         rootStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -85,6 +92,7 @@ final class MainWindowController: NSWindowController {
         let pathRow = NSStackView(views: [pathLabel, pathField, browseButton, analyzeButton, progressIndicator])
         pathRow.orientation = .horizontal
         pathRow.alignment = .centerY
+        pathRow.distribution = .fill
         pathRow.spacing = 8
         pathLabel.setContentHuggingPriority(.required, for: .horizontal)
         browseButton.setContentHuggingPriority(.required, for: .horizontal)
@@ -96,11 +104,20 @@ final class MainWindowController: NSWindowController {
         errorLabel.maximumNumberOfLines = 2
         errorLabel.isHidden = true
 
-        let findingsLabel = sectionLabel("Findings")
-        let dependenciesLabel = sectionLabel("Dependencies")
+        summaryLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        summaryLabel.textColor = .secondaryLabelColor
 
-        findingsTableView.heightAnchor.constraint(equalToConstant: 240).isActive = true
-        dependenciesTableView.heightAnchor.constraint(equalToConstant: 260).isActive = true
+        findingsTableView.translatesAutoresizingMaskIntoConstraints = false
+        dependenciesTableView.translatesAutoresizingMaskIntoConstraints = false
+        findingsTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        dependenciesTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        findingsTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
+        dependenciesTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+
+        let findingsSection = sectionContainer(title: "Findings", tableView: findingsTableView)
+        let dependenciesSection = sectionContainer(title: "Dependencies", tableView: dependenciesTableView)
+        findingsSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        dependenciesSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
         let exportRow = NSStackView(views: [markdownButton, jsonButton])
         exportRow.orientation = .horizontal
@@ -109,10 +126,9 @@ final class MainWindowController: NSWindowController {
 
         rootStack.addArrangedSubview(pathRow)
         rootStack.addArrangedSubview(errorLabel)
-        rootStack.addArrangedSubview(findingsLabel)
-        rootStack.addArrangedSubview(findingsTableView)
-        rootStack.addArrangedSubview(dependenciesLabel)
-        rootStack.addArrangedSubview(dependenciesTableView)
+        rootStack.addArrangedSubview(summaryLabel)
+        rootStack.addArrangedSubview(findingsSection)
+        rootStack.addArrangedSubview(dependenciesSection)
         rootStack.addArrangedSubview(exportRow)
 
         contentView.addSubview(rootStack)
@@ -121,7 +137,13 @@ final class MainWindowController: NSWindowController {
             rootStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             rootStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             rootStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            rootStack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -20),
+            rootStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
+            pathRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            errorLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            summaryLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            findingsSection.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            dependenciesSection.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            exportRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
     }
 
@@ -144,6 +166,13 @@ final class MainWindowController: NSWindowController {
             .sink { [weak self] message in
                 self?.errorLabel.stringValue = message ?? ""
                 self?.errorLabel.isHidden = message == nil
+            }
+            .store(in: &cancellables)
+
+        viewModel.$summaryText
+            .receive(on: RunLoop.main)
+            .sink { [weak self] text in
+                self?.summaryLabel.stringValue = text
             }
             .store(in: &cancellables)
 
@@ -178,6 +207,16 @@ final class MainWindowController: NSWindowController {
         return label
     }
 
+    /// Wraps a heading and table view into one vertical container.
+    private func sectionContainer(title: String, tableView: NSView) -> NSStackView {
+        let stack = NSStackView(views: [sectionLabel(title), tableView])
+        stack.orientation = .vertical
+        stack.alignment = .width
+        stack.distribution = .fill
+        stack.spacing = 6
+        return stack
+    }
+
     @objc
     /// Prompts the user for a project path and pushes the selection into the view model.
     private func browseTapped() {
@@ -185,6 +224,11 @@ final class MainWindowController: NSWindowController {
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.resolvesAliases = true
+        if let xcodeProjectType = UTType(filenameExtension: "xcodeproj") {
+            panel.allowedContentTypes = [xcodeProjectType]
+        }
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
             viewModel.projectPath = url.path
@@ -197,6 +241,18 @@ final class MainWindowController: NSWindowController {
     private func analyzeTapped() {
         viewModel.projectPath = pathField.stringValue
         viewModel.analyze()
+    }
+
+    @objc
+    /// Opens a project from the application menu.
+    func openProjectFromMenu(_ sender: Any?) {
+        browseTapped()
+    }
+
+    @objc
+    /// Re-runs the current analysis from the application menu.
+    func rerunAnalysisFromMenu(_ sender: Any?) {
+        analyzeTapped()
     }
 
     @objc

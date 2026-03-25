@@ -17,6 +17,8 @@ final class TrackerViewModel: ObservableObject {
     @Published private(set) var isAnalyzing = false
     /// The latest user-visible error, if the last run failed validation or execution.
     @Published private(set) var errorMessage: String?
+    /// Short summary string shown above the findings and dependencies tables.
+    @Published private(set) var summaryText = "No report loaded."
 
     /// Injectable service boundary used by production code and tests.
     private let service: DependencyTrackingService
@@ -57,6 +59,7 @@ final class TrackerViewModel: ObservableObject {
             report = nil
             findings = []
             dependencies = []
+            summaryText = "No report loaded."
             return
         }
 
@@ -73,6 +76,7 @@ final class TrackerViewModel: ObservableObject {
                 self.report = report
                 self.findings = report.findings
                 self.dependencies = report.dependencies
+                self.summaryText = Self.makeSummaryText(report: report)
                 self.errorMessage = nil
                 self.isAnalyzing = false
             } catch is CancellationError {
@@ -85,6 +89,7 @@ final class TrackerViewModel: ObservableObject {
                 self.report = nil
                 self.findings = []
                 self.dependencies = []
+                self.summaryText = "No report loaded."
                 self.errorMessage = error.localizedDescription
                 self.isAnalyzing = false
             }
@@ -106,5 +111,13 @@ final class TrackerViewModel: ObservableObject {
     func exportJSON() -> String? {
         guard let report else { return nil }
         return jsonFormatter.format(report)
+    }
+
+    /// Builds the summary string shown above the split tables.
+    static func makeSummaryText(report: DependencyReport) -> String {
+        let dependencyCount = report.dependencies.count
+        let outdatedCount = report.dependencies.filter { $0.outdated?.isOutdated == true }.count
+        let actionableCount = report.findings.filter(\.isActionable).count
+        return "\(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable"
     }
 }
