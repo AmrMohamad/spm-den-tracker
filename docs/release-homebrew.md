@@ -79,7 +79,8 @@ Local validation before pushing:
 
 ```bash
 ruby -c Formula/spm-dep-tracker.rb
-bash scripts/prepare_homebrew_release.sh --version 0.1.0 --dry-run --formula-out /tmp/spm-dep-tracker.rb
+bash scripts/prepare_homebrew_release.sh --version 0.1.0 --formula-out /tmp/spm-dep-tracker.rb --output-dir /tmp/homebrew
+ruby -c /tmp/spm-dep-tracker.rb
 ```
 
 For `HEAD` validation, use the same temporary tap strategy as CI:

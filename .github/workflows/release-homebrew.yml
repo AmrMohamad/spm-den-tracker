@@ -111,6 +111,18 @@ jobs:
           brew uninstall --force local/spmdeptracker-stable/spm-dep-tracker >/dev/null 2>&1 || true
           brew untap local/spmdeptracker-stable >/dev/null 2>&1 || true
 
+      - name: Validate dedicated tap credentials
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "${GH_TOKEN}" ]] || {
+            echo "Missing HOMEBREW_TAP_TOKEN secret required to update the dedicated tap repo." >&2
+            exit 1
+          }
+
+          gh repo view AmrMohamad/homebrew-spm-den-tracker >/dev/null
+
       - name: Publish GitHub release asset
         env:
           GH_TOKEN: ${{ github.token }}
@@ -145,11 +157,6 @@ jobs:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
-          [[ -n "${GH_TOKEN}" ]] || {
-            echo "Missing HOMEBREW_TAP_TOKEN secret required to update the dedicated tap repo." >&2
-            exit 1
-          }
-
           bash scripts/sync_homebrew_tap.sh \
             --version "${{ steps.meta.outputs.version }}" \
             --source-owner AmrMohamad \
