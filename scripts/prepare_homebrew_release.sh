@@ -11,6 +11,7 @@ REPO_NAME="spm-den-tracker"
 OUTPUT_DIR="${REPO_ROOT}/dist/homebrew"
 ARCHIVE_NAME="spm-dep-tracker-macos.tar.gz"
 ARCHS=("arm64" "x86_64")
+FORMULA_OUT="${REPO_ROOT}/Formula/spm-dep-tracker.rb"
 DRY_RUN=0
 SKIP_BUILD=0
 
@@ -30,6 +31,8 @@ Options:
   --archive-name <name>   Archive filename. Default: ${ARCHIVE_NAME}
   --arch <name>           Target architecture to pass to SwiftPM. Repeatable.
                           Default: arm64 + x86_64
+  --formula-out <path>    Path where the rendered formula should be written.
+                          Default: ${FORMULA_OUT}
   --skip-build            Reuse an existing .build/release/spm-dep-tracker binary.
   --dry-run               Print the planned work without mutating files.
   -h, --help              Show this help text.
@@ -101,6 +104,11 @@ parse_args() {
           ARCHS=()
         fi
         ARCHS+=("$2")
+        shift 2
+        ;;
+      --formula-out)
+        [[ $# -ge 2 ]] || fail "--formula-out requires a value"
+        FORMULA_OUT="$2"
         shift 2
         ;;
       --skip-build)
@@ -203,7 +211,7 @@ write_formula() {
   local repo="$3"
   local archive_name="$4"
   local sha="$5"
-  local formula_path="${REPO_ROOT}/Formula/spm-dep-tracker.rb"
+  local formula_path="${FORMULA_OUT}"
 
   local homepage="https://github.com/${owner}/${repo}"
   local release_url="${homepage}/releases/download/v${version}/${archive_name}"
@@ -218,6 +226,8 @@ write_formula() {
 EOF
     return 0
   fi
+
+  mkdir -p "$(dirname "${formula_path}")"
 
   cat > "${formula_path}" <<EOF
 class SpmDepTracker < Formula
@@ -263,12 +273,13 @@ print_next_steps() {
   log "  Version: ${version}"
   log "  Archive: ${archive_path}"
   log "  SHA256: ${sha}"
+  log "  Formula: ${FORMULA_OUT}"
   log
   log "Next steps:"
   log "  1. Create and push tag v${version}."
   log "  2. Create a GitHub release for v${version}."
   log "  3. Upload $(basename "${archive_path}") to that release."
-  log "  4. Commit the rewritten Formula/spm-dep-tracker.rb."
+  log "  4. Publish the rendered formula to the dedicated tap repo."
   log "  5. Users install with: brew install ${owner}/${repo}/spm-dep-tracker"
 }
 

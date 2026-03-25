@@ -117,7 +117,7 @@ Run `./scripts/install_dependency_tracker_app.sh --help` for the full installer 
 
 ### Homebrew
 
-The repository now includes a Homebrew formula for the CLI at [Formula/spm-dep-tracker.rb](Formula/spm-dep-tracker.rb).
+The upstream repo keeps a development/reference formula at [Formula/spm-dep-tracker.rb](Formula/spm-dep-tracker.rb), but the public first-time install path is moving to a dedicated tap repo.
 
 Best-practice install target:
 
@@ -125,14 +125,15 @@ Best-practice install target:
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
-That plain install command requires a stable release-backed formula with a fixed `url` and `sha256`.
+That command requires a dedicated tap repo named `AmrMohamad/homebrew-spm-den-tracker`, because Homebrew resolves `user/repo/formula` taps via the `homebrew-<repo>` naming convention.
 
 Current repository state:
 
-- the checked-in formula is still `HEAD`-only until a stable release archive is published
+- the checked-in formula here is still `HEAD`-only and is meant for maintainer validation, not the final first-time public install path
 - `DependencyTrackerApp` remains outside the formula and continues to use the guided installer
-- maintainers can prepare the stable formula inputs with `./scripts/prepare_homebrew_release.sh --version <x.y.z>`
-- the tag workflow at [release-homebrew.yml](.github/workflows/release-homebrew.yml) publishes the CLI archive and opens the formula stabilization PR automatically
+- maintainers can render a stable tap formula with `./scripts/prepare_homebrew_release.sh --version <x.y.z> --formula-out <path>`
+- maintainers can sync the dedicated tap repo with `./scripts/sync_homebrew_tap.sh --version <x.y.z>`
+- the tag workflow at [release-homebrew.yml](.github/workflows/release-homebrew.yml) publishes the CLI archive and syncs the dedicated tap repo automatically
 - the release archive is validated as a universal `arm64` + `x86_64` binary before the workflow publishes it
 
 Until the first stable Homebrew release is published, maintainers can still install the CLI from source with:
@@ -147,7 +148,15 @@ After the stable release is published, users should prefer:
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
-Release maintenance details live in [release-homebrew.md](docs/release-homebrew.md).
+Bare install by first-time users:
+
+```bash
+brew install spm-dep-tracker
+```
+
+is a future `homebrew/core` goal, not something a custom tap can provide on a fresh machine.
+
+Release maintenance details live in [release-homebrew.md](docs/release-homebrew.md), and future core-submission prep lives in [homebrew-core-readiness.md](docs/homebrew-core-readiness.md).
 
 ## CLI Reference
 

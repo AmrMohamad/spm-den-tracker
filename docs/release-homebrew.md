@@ -7,14 +7,17 @@ brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
 ```
 
 That command is only valid once `Formula/spm-dep-tracker.rb` has a stable `url` and `sha256`.
-Homebrew rejects plain installs for `HEAD`-only formulae.
+Homebrew rejects plain installs for `HEAD`-only formulae, and first-time
+installation of `AmrMohamad/spm-den-tracker/spm-dep-tracker` requires a
+dedicated tap repo named `AmrMohamad/homebrew-spm-den-tracker`.
 
 ## Recommended Release Shape
 
-- keep the formula in this repository's `Formula/` directory so the repo acts as the tap
+- keep this repository as the source repo and release artifact owner
+- publish the public formula from the dedicated tap repo `AmrMohamad/homebrew-spm-den-tracker`
 - ship a stable GitHub release asset for the CLI as one universal macOS binary
 - keep a `head` stanza in the formula for maintainer-only installs and validation
-- validate the formula in CI using a temporary local tap before merging changes
+- validate the formula in CI using a temporary local tap before publishing or syncing it
 - treat release assets as immutable for a given version; reruns must fail instead of overwriting the published archive
 
 This repo already includes that CI check in [homebrew-validate.yml](../.github/workflows/homebrew-validate.yml).
@@ -27,10 +30,10 @@ The PR validation workflow intentionally treats `HEAD` formulas differently from
 
 ## Maintainer Flow
 
-1. Prepare the release artifact and rewrite the formula:
+1. Prepare the release artifact and render the tap formula:
 
 ```bash
-./scripts/prepare_homebrew_release.sh --version 0.1.0
+./scripts/prepare_homebrew_release.sh --version 0.1.0 --formula-out /tmp/spm-dep-tracker.rb
 ```
 
 This script:
@@ -38,26 +41,32 @@ This script:
 - builds the release CLI as a universal `arm64` + `x86_64` binary unless `--skip-build` is passed
 - creates `dist/homebrew/v<version>/spm-dep-tracker-macos.tar.gz`
 - computes the SHA-256 checksum
-- rewrites `Formula/spm-dep-tracker.rb` to include both:
-  - a stable release-backed install path
+- renders a stable formula with both:
+  - a release-backed install path for the dedicated tap repo
   - a `head` install path for maintainers
 
-2. Create and push the release tag:
+2. Sync the dedicated tap repo manually if needed:
+
+```bash
+./scripts/sync_homebrew_tap.sh --version 0.1.0
+```
+
+3. Create and push the release tag:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-3. Create a GitHub release for `v0.1.0` and upload:
+4. Create a GitHub release for `v0.1.0` and upload:
 
 ```bash
 dist/homebrew/v0.1.0/spm-dep-tracker-macos.tar.gz
 ```
 
-4. Let the release workflow open the stabilization PR for the rewritten formula.
+5. Let the release workflow sync the dedicated tap repo using the `HOMEBREW_TAP_TOKEN` secret.
 
-5. Verify the public install path:
+6. Verify the public install path:
 
 ```bash
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
