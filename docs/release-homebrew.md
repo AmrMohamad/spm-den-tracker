@@ -20,6 +20,11 @@ Homebrew rejects plain installs for `HEAD`-only formulae.
 This repo already includes that CI check in [homebrew-validate.yml](../.github/workflows/homebrew-validate.yml).
 The tag-driven release path is implemented in [release-homebrew.yml](../.github/workflows/release-homebrew.yml).
 
+The PR validation workflow intentionally treats `HEAD` formulas differently from stable formulas:
+
+- stable formulas are installed and tested through a temporary local tap
+- `HEAD` formulas are syntax-checked only on GitHub-hosted runners because the current runner toolchain (`Swift 6.2.3` on `Xcode 26.2`) fails inside `swift-argument-parser`, which would make maintainer-only `HEAD` validation an unreliable merge blocker
+
 ## Maintainer Flow
 
 1. Prepare the release artifact and rewrite the formula:
