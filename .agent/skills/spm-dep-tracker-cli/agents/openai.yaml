@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPM Dependency Tracker CLI"
+  short_description: "Run and interpret SPM dependency audits"
+  default_prompt: "Use $spm-dep-tracker-cli to audit an Xcode project or Package.resolved path and explain the results."
