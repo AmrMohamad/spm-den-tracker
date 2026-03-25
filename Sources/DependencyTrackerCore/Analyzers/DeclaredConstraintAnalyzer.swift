@@ -21,11 +21,14 @@ struct DeclaredConstraintAnalyzer: Sendable {
     private let versionCatalog: RemoteVersionCatalog
     /// Whether policy findings should affect exit codes.
     private let strictConstraints: Bool
+    /// The maximum number of concurrent remote lookups allowed in one run.
+    private let concurrentFetchLimit: Int
 
     /// Creates an analyzer backed by the shared version catalog.
-    init(versionCatalog: RemoteVersionCatalog, strictConstraints: Bool) {
+    init(versionCatalog: RemoteVersionCatalog, strictConstraints: Bool, concurrentFetchLimit: Int) {
         self.versionCatalog = versionCatalog
         self.strictConstraints = strictConstraints
+        self.concurrentFetchLimit = max(1, concurrentFetchLimit)
     }
 
     /// Evaluates all declared requirements against the current resolved pins.
@@ -36,16 +39,29 @@ struct DeclaredConstraintAnalyzer: Sendable {
         })
 
         return try await withThrowingTaskGroup(of: ConstraintAssessment.self, returning: [ConstraintAssessment].self) { group in
-            for requirement in declared {
-                guard let pin = resolvePin(for: requirement, pinsByIdentity: pinsByIdentity, pinsByLocation: pinsByLocation) else {
-                    continue
+            var iterator = declared.makeIterator()
+            var active = 0
+            var results: [ConstraintAssessment] = []
+
+            func enqueueNextIfAvailable() {
+                while active < concurrentFetchLimit, let requirement = iterator.next() {
+                    guard let pin = resolvePin(
+                        for: requirement,
+                        pinsByIdentity: pinsByIdentity,
+                        pinsByLocation: pinsByLocation
+                    ) else {
+                        continue
+                    }
+                    active += 1
+                    group.addTask { try await self.assess(pin: pin, requirement: requirement) }
                 }
-                group.addTask { try await self.assess(pin: pin, requirement: requirement) }
             }
 
-            var results: [ConstraintAssessment] = []
+            enqueueNextIfAvailable()
             while let result = try await group.next() {
                 results.append(result)
+                active -= 1
+                enqueueNextIfAvailable()
             }
             return results.sorted { $0.identity < $1.identity }
         }

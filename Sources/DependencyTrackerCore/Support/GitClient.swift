@@ -103,21 +103,23 @@ struct GitClient: GitClientProtocol {
 
         return result.stdout
             .split(whereSeparator: \.isNewline)
-            .compactMap { line in
-                line.split(separator: "\t").last.map(String.init)
+            .compactMap { line -> String? in
+                guard let ref = line.split(separator: "\t").last.map(String.init) else {
+                    return nil
+                }
+                return ref.hasSuffix("^{}") ? nil : ref
             }
     }
 
     /// Converts an absolute file URL into the repository-relative path git expects.
     private func relativePath(for filePath: URL, repositoryRoot: URL) -> String {
-        let file = filePath.standardizedFileURL.path
-        let root = repositoryRoot.standardizedFileURL.path
-        guard file.hasPrefix(root) else {
+        let fileComponents = filePath.standardizedFileURL.pathComponents
+        let rootComponents = repositoryRoot.standardizedFileURL.pathComponents
+        guard fileComponents.count > rootComponents.count,
+              Array(fileComponents.prefix(rootComponents.count)) == rootComponents else {
             return filePath.path
         }
 
-        let index = file.index(file.startIndex, offsetBy: root.count)
-        let suffix = file[index...]
-        return suffix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return fileComponents.dropFirst(rootComponents.count).joined(separator: "/")
     }
 }

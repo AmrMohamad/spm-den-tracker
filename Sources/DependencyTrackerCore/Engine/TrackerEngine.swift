@@ -27,7 +27,8 @@ public struct TrackerEngine: Sendable {
         self.declaredRequirementLoader = DeclaredRequirementLoader()
         self.declaredConstraintAnalyzer = DeclaredConstraintAnalyzer(
             versionCatalog: versionCatalog,
-            strictConstraints: configuration.strictConstraints
+            strictConstraints: configuration.strictConstraints,
+            concurrentFetchLimit: configuration.concurrentFetchLimit
         )
         self.outdatedChecker = OutdatedChecker(
             versionCatalog: versionCatalog,

@@ -4,6 +4,91 @@ import Testing
 
 struct ProcessRunnerTests {
     @Test
+    func rejectsNegativeTimeout() async throws {
+        do {
+            _ = try await ProcessRunner().run(
+                arguments: ["sh", "-c", "echo ok"],
+                currentDirectoryURL: nil,
+                timeout: -1
+            )
+            Issue.record("Expected invalid timeout.")
+        } catch let error as DependencyTrackerError {
+            guard case .invalidTimeout(let timeout) = error, timeout == -1 else {
+                Issue.record("Expected invalidTimeout(-1), got \(error)")
+                return
+            }
+        }
+    }
+
+    @Test
+    func rejectsZeroTimeout() async throws {
+        do {
+            _ = try await ProcessRunner().run(
+                arguments: ["sh", "-c", "echo ok"],
+                currentDirectoryURL: nil,
+                timeout: 0
+            )
+            Issue.record("Expected invalid timeout.")
+        } catch let error as DependencyTrackerError {
+            guard case .invalidTimeout(let timeout) = error, timeout == 0 else {
+                Issue.record("Expected invalidTimeout(0), got \(error)")
+                return
+            }
+        }
+    }
+
+    @Test
+    func rejectsNaNTimeout() async throws {
+        do {
+            _ = try await ProcessRunner().run(
+                arguments: ["sh", "-c", "echo ok"],
+                currentDirectoryURL: nil,
+                timeout: .nan
+            )
+            Issue.record("Expected invalid timeout.")
+        } catch let error as DependencyTrackerError {
+            guard case .invalidTimeout(let timeout) = error, timeout.isNaN else {
+                Issue.record("Expected invalidTimeout(nan), got \(error)")
+                return
+            }
+        }
+    }
+
+    @Test
+    func rejectsInfiniteTimeout() async throws {
+        do {
+            _ = try await ProcessRunner().run(
+                arguments: ["sh", "-c", "echo ok"],
+                currentDirectoryURL: nil,
+                timeout: .infinity
+            )
+            Issue.record("Expected invalid timeout.")
+        } catch let error as DependencyTrackerError {
+            guard case .invalidTimeout(let timeout) = error, timeout.isInfinite else {
+                Issue.record("Expected invalidTimeout(infinity), got \(error)")
+                return
+            }
+        }
+    }
+
+    @Test
+    func rejectsVeryLargeFiniteTimeouts() async throws {
+        do {
+            _ = try await ProcessRunner().run(
+                arguments: ["sh", "-c", "echo ok"],
+                currentDirectoryURL: nil,
+                timeout: Double.greatestFiniteMagnitude
+            )
+            Issue.record("Expected invalid timeout.")
+        } catch let error as DependencyTrackerError {
+            guard case .invalidTimeout(let timeout) = error, timeout == Double.greatestFiniteMagnitude else {
+                Issue.record("Expected invalidTimeout(Double.greatestFiniteMagnitude), got \(error)")
+                return
+            }
+        }
+    }
+
+    @Test
     func capturesStdoutAndStderr() async throws {
         let result = try await ProcessRunner().run(
             arguments: ["sh", "-c", "printf 'hello'; printf 'warning' >&2"],

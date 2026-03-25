@@ -4,6 +4,8 @@ import Foundation
 public enum DependencyTrackerError: LocalizedError, Sendable {
     /// The supplied path did not exist or could not be interpreted as a supported input.
     case invalidPath(String)
+    /// The configured timeout was not a finite, positive duration.
+    case invalidTimeout(TimeInterval)
     /// A directory path contained multiple candidate projects and therefore could not be resolved safely.
     case ambiguousProjectPath(String, candidates: [String])
     /// The resolved file uses a schema version the parser does not understand.
@@ -20,6 +22,8 @@ public enum DependencyTrackerError: LocalizedError, Sendable {
         switch self {
         case .invalidPath(let path):
             return "Invalid project path: \(path)"
+        case .invalidTimeout(let timeout):
+            return "Invalid timeout: \(timeout). Timeout must be finite and greater than zero."
         case .ambiguousProjectPath(let path, let candidates):
             return "Multiple .xcodeproj bundles found under \(path): \(candidates.joined(separator: ", "))"
         case .unsupportedSchema(let version):
