@@ -6,9 +6,7 @@ on:
       - "v*"
 
 permissions:
-  actions: write
   contents: write
-  pull-requests: write
 
 concurrency:
   group: release-homebrew-${{ github.ref }}
@@ -133,12 +131,13 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
           ARCHIVE_NAME="${{ steps.meta.outputs.archive_name }}"
-          LOCAL_SHA="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
 
           [[ -f "${ARCHIVE_PATH}" ]] || {
             echo "Expected archive missing: ${ARCHIVE_PATH}" >&2
             exit 1
           }
+
+          LOCAL_SHA="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
 
           if gh release view "${TAG}" >/dev/null 2>&1; then
             if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -Fx "${ARCHIVE_NAME}" >/dev/null; then

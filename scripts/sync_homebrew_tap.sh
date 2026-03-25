@@ -125,6 +125,9 @@ git config user.email github-actions@users.noreply.github.com
 mkdir -p "$(dirname "${FORMULA_RELATIVE_PATH}")"
 
 DOWNLOAD_DIR="$(mktemp -d)"
+gh release view "v${VERSION}" --repo "${SOURCE_OWNER}/${SOURCE_REPO}" >/dev/null 2>&1 \
+  || fail "Release v${VERSION} does not exist in ${SOURCE_OWNER}/${SOURCE_REPO}. Publish the release first."
+
 gh release download "v${VERSION}" \
   --repo "${SOURCE_OWNER}/${SOURCE_REPO}" \
   --pattern "${ARCHIVE_NAME}" \
