@@ -6,6 +6,7 @@ on:
       - "v*"
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -134,6 +135,7 @@ jobs:
       - name: Open formula stabilization PR
         uses: peter-evans/create-pull-request@v7
         with:
+          base: main
           branch: codex/release-formula-v${{ steps.meta.outputs.version }}
           delete-branch: true
           commit-message: "[Enhance]: stabilize Homebrew formula for v${{ steps.meta.outputs.version }}"
@@ -151,3 +153,42 @@ jobs:
             - `ruby -c Formula/spm-dep-tracker.rb`
             - `git diff --check`
           signoff: false
+
+      - name: Trigger validation for stabilization branch
+        id: validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run homebrew-validate.yml \
+            --ref "codex/release-formula-v${{ steps.meta.outputs.version }}"
+
+          for attempt in $(seq 1 12); do
+            run_id="$(gh run list \
+              --workflow homebrew-validate.yml \
+              --branch "codex/release-formula-v${{ steps.meta.outputs.version }}" \
+              --event workflow_dispatch \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId')"
+
+            if [[ -n "${run_id}" && "${run_id}" != "null" ]]; then
+              echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+              break
+            fi
+
+            sleep 5
+          done
+
+          [[ -n "${run_id:-}" && "${run_id}" != "null" ]] || {
+            echo "Timed out waiting for dispatched validation workflow to appear." >&2
+            exit 1
+          }
+
+      - name: Wait for stabilization branch validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run watch "${{ steps.validation.outputs.run_id }}" --interval 10
+          gh run view "${{ steps.validation.outputs.run_id }}" --exit-status

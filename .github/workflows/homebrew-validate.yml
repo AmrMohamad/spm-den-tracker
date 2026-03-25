@@ -1,6 +1,7 @@
 name: Homebrew Validate
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -24,6 +25,16 @@ jobs:
           ruby -c Formula/spm-dep-tracker.rb
           git diff --check
 
+      - name: Detect formula install mode
+        id: mode
+        run: |
+          set -euo pipefail
+          if grep -q '^  url "' Formula/spm-dep-tracker.rb; then
+            echo "install_mode=stable" >> "${GITHUB_OUTPUT}"
+          else
+            echo "install_mode=head" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Install through a temporary local tap
         run: |
           set -euo pipefail
@@ -43,7 +54,11 @@ jobs:
           )
 
           brew tap --custom-remote local/spmdeptracker "file://${TAP_DIR}"
-          brew install --HEAD local/spmdeptracker/spm-dep-tracker
+          if [[ "${{ steps.mode.outputs.install_mode }}" == "stable" ]]; then
+            brew install local/spmdeptracker/spm-dep-tracker
+          else
+            brew install --HEAD local/spmdeptracker/spm-dep-tracker
+          fi
           brew test local/spmdeptracker/spm-dep-tracker
 
       - name: Cleanup temporary tap
