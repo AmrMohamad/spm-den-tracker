@@ -52,6 +52,23 @@ struct GitTrackingAuditorTests {
     }
 
     @Test
+    func locatorResolvesPackageManifestPath() throws {
+        let temp = try temporaryDirectory()
+        let manifestURL = temp.appendingPathComponent("Package.swift")
+        try "import PackageDescription\nlet package = Package(name: \"Sample\")\n".write(
+            to: manifestURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let target = try XcodeprojLocator().locateAuditTarget(at: manifestURL.path)
+
+        #expect(target.manifestURL == manifestURL)
+        #expect(target.projectFileURL == nil)
+        #expect(target.resolvedFileURL == temp.appendingPathComponent("Package.resolved"))
+    }
+
+    @Test
     func locatorRejectsAmbiguousDirectory() throws {
         let temp = try temporaryDirectory()
         try FileManager.default.createDirectory(at: temp.appendingPathComponent("One.xcodeproj"), withIntermediateDirectories: true)

@@ -33,7 +33,7 @@ struct AnalyzerTests {
 
         #expect(results.count == 1)
         #expect(results[0].latestVersion == "1.4.0")
-        #expect(results[0].updateType == .minor)
+        #expect(results[0].updateType == UpdateType.minor)
         #expect(results[0].isOutdated)
     }
 
@@ -55,8 +55,8 @@ struct AnalyzerTests {
 
         let results = try await checker.check([majorPin, patchPin])
 
-        #expect(results.first(where: { $0.pin.identity == "major" })?.updateType == .major)
-        #expect(results.first(where: { $0.pin.identity == "patch" })?.updateType == .patch)
+        #expect(results.first(where: { $0.pin.identity == "major" })?.updateType == UpdateType.major)
+        #expect(results.first(where: { $0.pin.identity == "patch" })?.updateType == UpdateType.patch)
     }
 
     @Test
