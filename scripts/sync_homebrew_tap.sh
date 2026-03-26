@@ -15,6 +15,9 @@ ARCHIVE_NAME="spm-dep-tracker-macos.tar.gz"
 WORK_DIR=""
 FORMULA_RELATIVE_PATH="Formula/spm-dep-tracker.rb"
 README_RELATIVE_PATH="README.md"
+TEMP_GIT_CONFIG_DIR=""
+TEMP_WORK_DIR=""
+DOWNLOAD_DIR=""
 
 usage() {
   cat <<EOF
@@ -40,6 +43,14 @@ fail() {
   printf 'Error: %s\n' "$*" >&2
   exit 1
 }
+
+cleanup() {
+  [[ -n "${DOWNLOAD_DIR}" ]] && rm -rf "${DOWNLOAD_DIR}"
+  [[ -n "${TEMP_WORK_DIR}" ]] && rm -rf "${TEMP_WORK_DIR}"
+  [[ -n "${TEMP_GIT_CONFIG_DIR}" ]] && rm -rf "${TEMP_GIT_CONFIG_DIR}"
+}
+
+trap cleanup EXIT
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
@@ -102,12 +113,33 @@ require_command() {
 require_command git
 require_command gh
 require_command ruby
+require_command mktemp
 
 parse_args "$@"
 [[ -n "${VERSION}" ]] || fail "--version is required"
 
+configure_git_auth() {
+  gh auth status >/dev/null 2>&1 \
+    || fail "GitHub CLI is not authenticated. Export GH_TOKEN or run gh auth login before syncing the tap."
+
+  TEMP_GIT_CONFIG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/spm-dep-tracker-gh-auth.XXXXXX")"
+  export GIT_CONFIG_GLOBAL="${TEMP_GIT_CONFIG_DIR}/gitconfig"
+  : > "${GIT_CONFIG_GLOBAL}"
+
+  gh auth setup-git >/dev/null 2>&1 \
+    || fail "Failed to configure git to use GitHub CLI credentials for HTTPS pushes."
+}
+
+verify_push_auth() {
+  git push --dry-run origin HEAD:"${TAP_BRANCH}" >/dev/null 2>&1 \
+    || fail "Tap repo push authentication failed for ${TAP_OWNER}/${TAP_REPO}. Ensure GH_TOKEN or gh auth login has write access to the tap repo and that git HTTPS auth is configured."
+}
+
+configure_git_auth
+
 if [[ -z "${WORK_DIR}" ]]; then
-  WORK_DIR="$(mktemp -d)/${TAP_REPO}"
+  TEMP_WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${TAP_REPO}.XXXXXX")"
+  WORK_DIR="${TEMP_WORK_DIR}"
   gh repo clone "${TAP_OWNER}/${TAP_REPO}" "${WORK_DIR}"
 fi
 
@@ -122,9 +154,11 @@ git pull --ff-only origin "${TAP_BRANCH}"
 git config user.name github-actions
 git config user.email github-actions@users.noreply.github.com
 
+verify_push_auth
+
 mkdir -p "$(dirname "${FORMULA_RELATIVE_PATH}")"
 
-DOWNLOAD_DIR="$(mktemp -d)"
+DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${TAP_REPO}-download.XXXXXX")"
 gh release view "v${VERSION}" --repo "${SOURCE_OWNER}/${SOURCE_REPO}" >/dev/null 2>&1 \
   || fail "Release v${VERSION} does not exist in ${SOURCE_OWNER}/${SOURCE_REPO}. Publish the release first."
 
