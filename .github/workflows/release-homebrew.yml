@@ -137,7 +137,18 @@ jobs:
             exit 1
           }
 
-          LOCAL_SHA="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
+          extract_binary_sha() {
+            local archive_path="$1"
+            local extract_dir
+
+            extract_dir="$(mktemp -d)"
+            tar -tzf "${archive_path}" | grep -Fx "spm-dep-tracker" >/dev/null
+            tar -xzf "${archive_path}" -C "${extract_dir}"
+            shasum -a 256 "${extract_dir}/spm-dep-tracker" | awk '{print $1}'
+            rm -rf "${extract_dir}"
+          }
+
+          LOCAL_BINARY_SHA="$(extract_binary_sha "${ARCHIVE_PATH}")"
 
           if gh release view "${TAG}" >/dev/null 2>&1; then
             if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -Fx "${ARCHIVE_NAME}" >/dev/null; then
@@ -147,13 +158,13 @@ jobs:
                 --dir "${DOWNLOAD_DIR}" \
                 --clobber
 
-              PUBLISHED_SHA="$(shasum -a 256 "${DOWNLOAD_DIR}/${ARCHIVE_NAME}" | awk '{print $1}')"
-              [[ "${PUBLISHED_SHA}" == "${LOCAL_SHA}" ]] || {
-                echo "Published asset checksum ${PUBLISHED_SHA} does not match local build checksum ${LOCAL_SHA}." >&2
+              PUBLISHED_BINARY_SHA="$(extract_binary_sha "${DOWNLOAD_DIR}/${ARCHIVE_NAME}")"
+              [[ "${PUBLISHED_BINARY_SHA}" == "${LOCAL_BINARY_SHA}" ]] || {
+                echo "Published asset binary checksum ${PUBLISHED_BINARY_SHA} does not match local build binary checksum ${LOCAL_BINARY_SHA}." >&2
                 exit 1
               }
 
-              echo "Release ${TAG} and asset ${ARCHIVE_NAME} already exist with the expected checksum; continuing without mutation."
+              echo "Release ${TAG} and asset ${ARCHIVE_NAME} already exist with the expected binary payload; continuing without mutation."
               exit 0
             fi
 
