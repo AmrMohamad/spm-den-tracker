@@ -85,7 +85,9 @@ This recovery path requires:
 
 - the GitHub release asset for `v0.1.0` to already exist
 - authenticated `gh` access
+- a token with write access to `AmrMohamad/homebrew-spm-den-tracker`; for a fine-grained PAT, grant `Contents: Read and write`
 - push permission to `AmrMohamad/homebrew-spm-den-tracker`
+- the script configures git HTTPS auth from the active `gh` credentials before it clones or pushes the tap repo
 
 5. Verify the public install path:
 
