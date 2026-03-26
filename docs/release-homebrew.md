@@ -24,6 +24,7 @@ dedicated tap repo named `AmrMohamad/homebrew-spm-den-tracker`.
 
 This repo already includes that CI check in [homebrew-validate.yml](../.github/workflows/homebrew-validate.yml).
 The tag-driven release path is implemented in [release-homebrew.yml](../.github/workflows/release-homebrew.yml).
+Published-release drift is monitored by [release-homebrew-integrity.yml](../.github/workflows/release-homebrew-integrity.yml).
 
 The PR validation workflow intentionally treats `HEAD` formulas differently from stable formulas:
 
@@ -37,6 +38,14 @@ If you want automatic local release preflight from the terminal or Fork, run thi
 ```bash
 make setup-hooks
 ```
+
+## Repository Hardening
+
+Protect the release channel at the repository level:
+
+- add a tag ruleset for `v*` that restricts tag creation, updates, and deletions, and blocks force pushes except for the release maintainer path
+- enable immutable releases in repository settings so future release assets and metadata cannot be edited after publication
+- never move or recreate an existing release tag; if a release is bad, cut the next patch version instead
 
 ## Maintainer Flow
 
@@ -74,6 +83,12 @@ Creating the tag locally does not trigger anything by itself; the local
 automation boundary is the tag push.
 
 3. Let the tag workflow create the GitHub release asset and sync the dedicated tap repo using the `HOMEBREW_TAP_TOKEN` secret.
+
+The release workflow now also:
+
+- records a small release metadata asset with the tag commit and binary checksum
+- rejects reruns that try to mutate a published release from a moved tag
+- verifies the public release URL, tap formula checksum, and `brew install` path after tap sync succeeds
 
 4. If you need to recover or backfill the dedicated tap manually after the release asset exists:
 
@@ -133,6 +148,9 @@ For stable-release validation, the tag workflow validates all of these before pu
 - the archived binary launches with `--help`
 - a synthetic stable formula that points at the locally built archive installs and passes `brew test`
 - the dedicated tap sync path renders a formula from the published release checksum rather than from a local build, so reruns and manual recovery use the immutable release asset
+- the published tap formula, public asset URL, and `brew install AmrMohamad/spm-den-tracker/spm-dep-tracker` path are verified after release publication
+
+The scheduled/manual integrity workflow checks the published formula and release asset continuously even after the original tag workflow has finished, so missing assets or tap drift are caught later as well.
 
 ## Scope
 
