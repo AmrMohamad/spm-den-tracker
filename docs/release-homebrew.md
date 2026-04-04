@@ -52,7 +52,7 @@ Protect the release channel at the repository level:
 1. Prepare the release artifact and render the tap formula:
 
 ```bash
-./scripts/prepare_homebrew_release.sh --version 0.1.0 --formula-out /tmp/spm-dep-tracker.rb
+./scripts/prepare_homebrew_release.sh --version 0.2.0 --formula-out /tmp/spm-dep-tracker.rb
 ```
 
 This script:
@@ -67,8 +67,8 @@ This script:
 2. Create and push the release tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 If you push the tag from Fork instead of the terminal, the same tracked `pre-push`
@@ -93,12 +93,12 @@ The release workflow now also:
 4. If you need to repair a published release or backfill the dedicated tap after a release has drifted:
 
 ```bash
-gh workflow run repair-homebrew-release.yml -f version=0.1.0 -f brew_canary=true
+gh workflow run repair-homebrew-release.yml -f version=0.2.0 -f brew_canary=true
 ```
 
 This repair path:
 
-- checks out the tagged source for `v0.1.0`
+- checks out the tagged source for `v0.2.0`
 - rebuilds the archive and release metadata from that exact tag
 - uploads only missing release assets and refuses to overwrite existing mismatched assets
 - re-syncs the dedicated tap from the published archive checksum
@@ -114,7 +114,7 @@ It requires:
 5. If the release assets are healthy and only the tap needs manual recovery:
 
 ```bash
-./scripts/sync_homebrew_tap.sh --version 0.1.0
+./scripts/sync_homebrew_tap.sh --version 0.2.0
 ```
 
 6. Verify the public install path:
@@ -130,7 +130,7 @@ Local validation before pushing:
 
 ```bash
 ruby -c Formula/spm-dep-tracker.rb
-bash scripts/prepare_homebrew_release.sh --version 0.1.0 --formula-out /tmp/spm-dep-tracker.rb --output-dir /tmp/homebrew
+bash scripts/prepare_homebrew_release.sh --version 0.2.0 --formula-out /tmp/spm-dep-tracker.rb --output-dir /tmp/homebrew
 ruby -c /tmp/spm-dep-tracker.rb
 ```
 
@@ -143,8 +143,8 @@ One-time Fork smoke test:
 If you need to bypass the local preflight in an emergency:
 
 ```bash
-git push --no-verify origin v0.1.0
-SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT=1 git push origin v0.1.0
+git push --no-verify origin v0.2.0
+SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT=1 git push origin v0.2.0
 ```
 
 For `HEAD` validation, use the same temporary tap strategy as CI:
