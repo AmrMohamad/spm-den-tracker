@@ -153,127 +153,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          TAG="${GITHUB_REF_NAME}"
-          ARCHIVE_PATH="${{ steps.meta.outputs.archive_path }}"
-          ARCHIVE_NAME="${{ steps.meta.outputs.archive_name }}"
-          METADATA_PATH="${{ steps.meta.outputs.metadata_path }}"
-          METADATA_NAME="${{ steps.meta.outputs.metadata_name }}"
-
-          [[ -f "${ARCHIVE_PATH}" ]] || {
-            echo "Expected archive missing: ${ARCHIVE_PATH}" >&2
-            exit 1
-          }
-
-          extract_binary_sha() {
-            local archive_path="$1"
-            local extract_dir
-
-            extract_dir="$(mktemp -d)"
-            tar -tzf "${archive_path}" | grep -Fx "spm-dep-tracker" >/dev/null
-            tar -xzf "${archive_path}" -C "${extract_dir}"
-            shasum -a 256 "${extract_dir}/spm-dep-tracker" | awk '{print $1}'
-            rm -rf "${extract_dir}"
-          }
-
-          read_metadata_field() {
-            local metadata_path="$1"
-            local field="$2"
-
-            python3 - <<'PY' "${metadata_path}" "${field}"
-          import json
-          import sys
-
-          metadata_path, field = sys.argv[1:]
-          with open(metadata_path, "r", encoding="utf-8") as handle:
-              data = json.load(handle)
-
-          value = data.get(field)
-          if value is None:
-              raise SystemExit(1)
-
-          print(value)
-          PY
-          }
-
-          TAG_COMMIT="$(git rev-list -n 1 "${TAG}")"
-          LOCAL_BINARY_SHA="$(extract_binary_sha "${ARCHIVE_PATH}")"
-          python3 - <<'PY' "${METADATA_PATH}" "${TAG}" "${TAG_COMMIT}" "${LOCAL_BINARY_SHA}" "${ARCHIVE_NAME}"
-          import json
-          import sys
-          from pathlib import Path
-
-          metadata_path, tag, tag_commit_sha, binary_sha256, archive_name = sys.argv[1:]
-          payload = {
-              "tag": tag,
-              "tag_commit_sha": tag_commit_sha,
-              "binary_sha256": binary_sha256,
-              "archive_name": archive_name,
-          }
-          path = Path(metadata_path)
-          path.parent.mkdir(parents=True, exist_ok=True)
-          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-          PY
-
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            ASSET_NAMES="$(gh release view "${TAG}" --json assets --jq '.assets[].name')"
-            ARCHIVE_PRESENT=0
-            METADATA_PRESENT=0
-
-            if printf '%s\n' "${ASSET_NAMES}" | grep -Fx "${ARCHIVE_NAME}" >/dev/null; then
-              ARCHIVE_PRESENT=1
-            fi
-
-            if printf '%s\n' "${ASSET_NAMES}" | grep -Fx "${METADATA_NAME}" >/dev/null; then
-              METADATA_PRESENT=1
-              DOWNLOAD_DIR="$(mktemp -d)"
-              gh release download "${TAG}" \
-                --pattern "${METADATA_NAME}" \
-                --dir "${DOWNLOAD_DIR}" \
-                --clobber
-
-              PUBLISHED_TAG_COMMIT="$(read_metadata_field "${DOWNLOAD_DIR}/${METADATA_NAME}" tag_commit_sha)"
-              [[ "${PUBLISHED_TAG_COMMIT}" == "${TAG_COMMIT}" ]] || {
-                echo "Release ${TAG} was already published from commit ${PUBLISHED_TAG_COMMIT}, but the current tag points to ${TAG_COMMIT}. Refusing to mutate a moved release tag." >&2
-                exit 1
-              }
-
-              PUBLISHED_METADATA_BINARY_SHA="$(read_metadata_field "${DOWNLOAD_DIR}/${METADATA_NAME}" binary_sha256)"
-              [[ "${PUBLISHED_METADATA_BINARY_SHA}" == "${LOCAL_BINARY_SHA}" ]] || {
-                echo "Published release metadata binary checksum ${PUBLISHED_METADATA_BINARY_SHA} does not match local build binary checksum ${LOCAL_BINARY_SHA}." >&2
-                exit 1
-              }
-            fi
-
-            if [[ "${ARCHIVE_PRESENT}" -eq 1 ]]; then
-              DOWNLOAD_DIR="$(mktemp -d)"
-              gh release download "${TAG}" \
-                --pattern "${ARCHIVE_NAME}" \
-                --dir "${DOWNLOAD_DIR}" \
-                --clobber
-
-              PUBLISHED_BINARY_SHA="$(extract_binary_sha "${DOWNLOAD_DIR}/${ARCHIVE_NAME}")"
-              [[ "${PUBLISHED_BINARY_SHA}" == "${LOCAL_BINARY_SHA}" ]] || {
-                echo "Published asset binary checksum ${PUBLISHED_BINARY_SHA} does not match local build binary checksum ${LOCAL_BINARY_SHA}." >&2
-                exit 1
-              }
-            fi
-
-            if [[ "${ARCHIVE_PRESENT}" -eq 0 ]]; then
-              gh release upload "${TAG}" "${ARCHIVE_PATH}"
-            fi
-
-            if [[ "${METADATA_PRESENT}" -eq 0 ]]; then
-              gh release upload "${TAG}" "${METADATA_PATH}"
-            fi
-
-            echo "Release ${TAG} already exists with the expected payload and provenance; continuing without mutation."
-            exit 0
-          fi
-
-          gh release create "${TAG}" "${ARCHIVE_PATH}" "${METADATA_PATH}" \
-            --title "${TAG}" \
-            --notes "Release ${TAG}"
+          bash scripts/publish_homebrew_release_assets.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --source-owner AmrMohamad \
+            --source-repo spm-den-tracker \
+            --archive-path "${{ steps.meta.outputs.archive_path }}" \
+            --archive-name "${{ steps.meta.outputs.archive_name }}" \
+            --metadata-path "${{ steps.meta.outputs.metadata_path }}" \
+            --metadata-name "${{ steps.meta.outputs.metadata_name }}"
 
       - name: Sync dedicated Homebrew tap
         env:
