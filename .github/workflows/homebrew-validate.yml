@@ -7,15 +7,18 @@ on:
     branches:
       - main
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   formula:
     runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Swift
-        uses: SwiftyLab/setup-swift@latest
+        uses: ./.github/actions/setup-macos-swift
         with:
           swift-version: "6.2"
 
