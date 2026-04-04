@@ -35,12 +35,18 @@ The result is shared across every output surface in the repo: terminal table, Ma
 
 ## Supported Inputs
 
-All CLI commands accept the same input forms:
+`doctor`, `report`, and `graph` accept these input forms:
 
 - a direct `.xcodeproj` path
 - a directory that contains exactly one immediate `.xcodeproj`
 - a direct `Package.resolved` path
 - a repository root when `--analysis-mode monorepo` is enabled
+
+`check-tracking` keeps the original v1 contract:
+
+- a direct `.xcodeproj` path
+- a directory that contains exactly one immediate `.xcodeproj`
+- a direct `Package.resolved` path
 
 If a directory contains more than one immediate `.xcodeproj`, the path is treated as ambiguous and the command fails intentionally.
 
