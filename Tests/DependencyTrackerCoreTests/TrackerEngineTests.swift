@@ -17,6 +17,45 @@ struct TrackerEngineTests {
         #expect(report.dependencies.isEmpty)
         #expect(report.findings.contains { $0.message == "Package.resolved is missing." && $0.severity == .error })
     }
+
+    @Test
+    func schemaVersion1ResolvedFileProducesStructuredLegacyReport() async throws {
+        let directory = try temporaryDirectory()
+        let resolvedURL = directory.appendingPathComponent("Package.resolved")
+        try """
+        {
+          "object": {
+            "pins": [
+              {
+                "package": "alamofire",
+                "repositoryURL": "https://github.com/Alamofire/Alamofire.git",
+                "state": {
+                  "branch": null,
+                  "revision": "1111111111111111111111111111111111111111",
+                  "version": "5.9.1"
+                }
+              }
+            ]
+          },
+          "version": 1
+        }
+        """.write(to: resolvedURL, atomically: true, encoding: .utf8)
+
+        let report = try await TrackerEngine(
+            configuration: TrackerConfiguration(
+                checkOutdated: false,
+                checkDeclaredConstraints: false,
+                timeout: 2
+            )
+        ).analyze(projectPath: resolvedURL.path)
+
+        #expect(report.resolvedFilePath == resolvedURL.path)
+        #expect(report.schemaVersion?.version == 1)
+        #expect(report.schemaVersion?.compatibility == .legacy)
+        #expect(report.dependencies.count == 1)
+        #expect(report.dependencies[0].pin.identity == "alamofire")
+        #expect(report.findings.contains { $0.category == .schema && $0.message.contains("Schema version 1") })
+    }
 }
 
 private func temporaryDirectory() throws -> URL {

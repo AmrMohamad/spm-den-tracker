@@ -9,6 +9,12 @@ struct SchemaVersionChecker: Sendable {
     func check(at url: URL) throws -> SchemaInfo {
         let document = try parser.parseDocument(at: url)
         switch document.version {
+        case 1:
+            return SchemaInfo(
+                version: 1,
+                compatibility: .legacy,
+                message: "Schema version 1 is an older Xcode/SwiftPM format. Verify CI and developer toolchains."
+            )
         case 3:
             return SchemaInfo(
                 version: 3,

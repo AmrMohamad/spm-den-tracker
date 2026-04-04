@@ -6,6 +6,17 @@ struct ResolvedFileParserTests {
     private let parser = ResolvedFileParser()
 
     @Test
+    func parsesVersion1Fixture() throws {
+        let document = try parser.parseDocument(at: fixtureURL(named: "Package.resolved.v1.json"))
+
+        #expect(document.version == 1)
+        #expect(document.pins.count == 2)
+        #expect(document.pins[0].identity == "alamofire")
+        #expect(document.pins[0].state.displayValue == "5.9.1")
+        #expect(document.pins[1].state.strategyLabel == "branch")
+    }
+
+    @Test
     func parsesVersion2Fixture() throws {
         let document = try parser.parseDocument(at: fixtureURL(named: "Package.resolved.v2.json"))
 
@@ -71,6 +82,15 @@ struct ResolvedFileParserTests {
         #expect(throws: DependencyTrackerError.self) {
             try parser.parseDocument(at: url)
         }
+    }
+
+    @Test
+    func schemaCheckerReturnsLegacyForVersion1() throws {
+        let info = try SchemaVersionChecker().check(at: fixtureURL(named: "Package.resolved.v1.json"))
+
+        #expect(info.version == 1)
+        #expect(info.compatibility == .legacy)
+        #expect(info.message.contains("older Xcode/SwiftPM format"))
     }
 
     @Test

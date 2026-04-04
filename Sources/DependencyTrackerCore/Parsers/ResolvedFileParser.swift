@@ -27,7 +27,7 @@ struct ResolvedFileParser: Sendable {
             throw DependencyTrackerError.malformedResolvedFile("Missing version field")
         }
 
-        guard [2, 3].contains(version) else {
+        guard [1, 2, 3].contains(version) else {
             throw DependencyTrackerError.unsupportedSchema(version)
         }
 

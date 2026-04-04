@@ -3,6 +3,29 @@ import DependencyTrackerCore
 
 @MainActor
 final class TrackerViewModelTests: XCTestCase {
+    func testProjectSelectionValidatorAcceptsSupportedInputShapes() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let folderURL = temp.appendingPathComponent("RepoRoot", isDirectory: true)
+        let projectURL = temp.appendingPathComponent("Sample.xcodeproj", isDirectory: true)
+        let resolvedURL = temp.appendingPathComponent("Package.resolved")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
+        try "{}".write(to: resolvedURL, atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(ProjectSelectionValidator.isSupported(url: folderURL))
+        XCTAssertTrue(ProjectSelectionValidator.isSupported(url: projectURL))
+        XCTAssertTrue(ProjectSelectionValidator.isSupported(url: resolvedURL))
+    }
+
+    func testProjectSelectionValidatorRejectsUnsupportedFiles() throws {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileURL = temp.appendingPathComponent("notes.txt")
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        XCTAssertFalse(ProjectSelectionValidator.isSupported(url: fileURL))
+    }
+
     func testEmptyInputSetsValidationErrorWithoutCallingService() async throws {
         let service = CountingService(mode: .success(sampleReport(projectPath: "/tmp/ignored.xcodeproj")))
         let viewModel = TrackerViewModel(service: service)
