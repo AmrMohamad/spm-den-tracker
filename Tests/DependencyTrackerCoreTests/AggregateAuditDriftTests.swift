@@ -88,6 +88,86 @@ struct AggregateAuditDriftTests {
     }
 
     @Test
+    func crossManifestAnalyzerFlagsRangeUpperBoundDifferences() {
+        let findings = CrossManifestConstraintDriftAnalyzer().analyze([
+            contextReport(
+                contextKey: "workspace-a",
+                displayPath: "/repo/Core",
+                reportPath: "/repo/Core/Package.swift",
+                identity: "protobuf",
+                declaredRequirement: .init(
+                    identity: "protobuf",
+                    source: .packageManifest,
+                    kind: .range,
+                    lowerBound: "1.0.0",
+                    upperBound: "2.0.0",
+                    location: "https://example.com/protobuf.git",
+                    description: "1.0.0..<2.0.0"
+                ),
+                pin: .version("1.2.3", revision: "abc")
+            ),
+            contextReport(
+                contextKey: "workspace-b",
+                displayPath: "/repo/Shared",
+                reportPath: "/repo/Shared/Package.swift",
+                identity: "protobuf",
+                declaredRequirement: .init(
+                    identity: "protobuf",
+                    source: .packageManifest,
+                    kind: .range,
+                    lowerBound: "1.0.0",
+                    upperBound: "1.5.0",
+                    location: "https://example.com/protobuf.git",
+                    description: "1.0.0..<1.5.0"
+                ),
+                pin: .version("1.2.3", revision: "def")
+            )
+        ])
+
+        #expect(findings.count == 1)
+        #expect(findings[0].severity == .warning)
+    }
+
+    @Test
+    func crossManifestAnalyzerFlagsBranchReferenceDifferences() {
+        let findings = CrossManifestConstraintDriftAnalyzer().analyze([
+            contextReport(
+                contextKey: "workspace-a",
+                displayPath: "/repo/Core",
+                reportPath: "/repo/Core/Package.swift",
+                identity: "graphql",
+                declaredRequirement: .init(
+                    identity: "graphql",
+                    source: .packageManifest,
+                    kind: .branch,
+                    reference: "main",
+                    location: "https://example.com/graphql.git",
+                    description: "branch main"
+                ),
+                pin: .branch("main", revision: "abc")
+            ),
+            contextReport(
+                contextKey: "workspace-b",
+                displayPath: "/repo/Shared",
+                reportPath: "/repo/Shared/Package.swift",
+                identity: "graphql",
+                declaredRequirement: .init(
+                    identity: "graphql",
+                    source: .packageManifest,
+                    kind: .branch,
+                    reference: "release",
+                    location: "https://example.com/graphql.git",
+                    description: "branch release"
+                ),
+                pin: .branch("release", revision: "def")
+            )
+        ])
+
+        #expect(findings.count == 1)
+        #expect(findings[0].severity == .error)
+    }
+
+    @Test
     func crossContextAnalyzerFlagsSameMajorAsWarning() {
         let findings = CrossContextResolvedDriftAnalyzer().analyze([
             contextReport(
