@@ -5,6 +5,8 @@ import Foundation
 struct CLIContext: Sendable {
     /// Shared audit engine configured with the CLI defaults.
     let engine: TrackerEngine
+    /// Aggregate workspace engine configured with the CLI defaults.
+    let workspaceEngine: WorkspaceAuditEngine
     /// Plain-text table formatter used by `doctor` and the default `report` mode.
     let tableFormatter = TableReporter()
     /// Markdown formatter used when the user requests sharable output.
@@ -17,14 +19,34 @@ struct CLIContext: Sendable {
     let junitFormatter = JUnitReporter()
 
     /// Creates a CLI context with the desired strict-constraint behavior.
-    init(strictConstraints: Bool = false) {
-        self.engine = TrackerEngine(
-            configuration: TrackerConfiguration(strictConstraints: strictConstraints)
+    init(strictConstraints: Bool = false, analysisMode: AnalysisMode = .singleTarget) {
+        let configuration = TrackerConfiguration(
+            analysisMode: analysisMode,
+            strictConstraints: strictConstraints
         )
+        let engine = TrackerEngine(configuration: configuration)
+        self.engine = engine
+        self.workspaceEngine = WorkspaceAuditEngine(configuration: configuration, trackerEngine: engine)
     }
 
     /// Renders a report using the formatter selected by the CLI option.
     func render(_ report: DependencyReport, format: ReportFormat) -> String {
+        switch format {
+        case .table:
+            return tableFormatter.format(report)
+        case .markdown:
+            return markdownFormatter.format(report)
+        case .json:
+            return jsonFormatter.format(report)
+        case .xcode:
+            return xcodeFormatter.format(report)
+        case .junit:
+            return junitFormatter.format(report)
+        }
+    }
+
+    /// Renders a workspace report using the same formatter choices as the single-target report.
+    func render(_ report: WorkspaceReport, format: ReportFormat) -> String {
         switch format {
         case .table:
             return tableFormatter.format(report)

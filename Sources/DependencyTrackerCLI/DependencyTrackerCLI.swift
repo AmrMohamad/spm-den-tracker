@@ -18,16 +18,19 @@ struct DependencyTrackerCLI: AsyncParsableCommand {
         Subcommands:
         - `doctor`: run the full audit and print a terminal summary
         - `report`: generate table, markdown, or JSON output
+        - `graph`: render a workspace graph as Mermaid, DOT, or JSON
         - `check-tracking`: quickly verify whether the lockfile is tracked by git
 
         Typical usage:
           spm-dep-tracker doctor MyApp.xcodeproj
           spm-dep-tracker report MyApp.xcodeproj --format markdown
+          spm-dep-tracker graph . --format mermaid
           spm-dep-tracker check-tracking /path/to/Package.resolved
         """,
         subcommands: [
             Doctor.self,
             Report.self,
+            Graph.self,
             CheckTracking.self,
         ]
     )

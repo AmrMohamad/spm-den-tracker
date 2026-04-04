@@ -16,10 +16,16 @@ struct Report: AsyncParsableCommand {
         - `/path/to/repo-root` when that directory contains exactly one `.xcodeproj`
         - `/path/to/Package.resolved`
 
+        Analysis mode:
+        - `single-target` preserves the current one-report behavior
+        - `auto` lets the engine choose workspace-aware behavior for directory inputs
+        - `monorepo` forces workspace-aware analysis
+
         Common examples:
           spm-dep-tracker report MyApp.xcodeproj
           spm-dep-tracker report MyApp.xcodeproj --format markdown
           spm-dep-tracker report MyApp.xcodeproj --format json --output ./Reports/dependencies.json
+          spm-dep-tracker report . --analysis-mode monorepo --format markdown
           spm-dep-tracker report MyApp.xcodeproj --format xcode
           spm-dep-tracker report MyApp.xcodeproj --format junit --strict-constraints
 
@@ -33,6 +39,10 @@ struct Report: AsyncParsableCommand {
     /// Path to the project bundle, project directory, or resolved file to audit.
     @Argument(help: "Path to an `.xcodeproj`, a directory containing one `.xcodeproj`, or a direct `Package.resolved` file.")
     var projectPath: String
+
+    /// Selects how the command should interpret the input path.
+    @Option(name: .long, help: "Select the analysis mode: `auto`, `monorepo`, or `single-target`.")
+    var analysisMode: AnalysisModeOption = .singleTarget
 
     /// Output formatter selected by the user.
     @Option(name: .long, help: "Select the output format: `table`, `markdown`, `json`, `xcode`, or `junit`.")
@@ -48,7 +58,13 @@ struct Report: AsyncParsableCommand {
 
     /// Runs the command and throws the resulting exit code for ArgumentParser.
     func run() async throws {
-        throw try await Self.execute(projectPath: projectPath, format: format, output: output, strictConstraints: strictConstraints)
+        throw try await Self.execute(
+            projectPath: projectPath,
+            analysisMode: analysisMode.coreValue,
+            format: format,
+            output: output,
+            strictConstraints: strictConstraints
+        )
     }
 
     /// Performs the report generation with injectable side effects for CLI tests.
@@ -69,6 +85,7 @@ struct Report: AsyncParsableCommand {
     /// - Returns: Exit code `1` when the report contains actionable findings, otherwise `0`.
     static func execute(
         projectPath: String,
+        analysisMode: AnalysisMode = .singleTarget,
         format: ReportFormat,
         output: String?,
         strictConstraints: Bool = false,
@@ -77,9 +94,22 @@ struct Report: AsyncParsableCommand {
         writeFile: (String, URL) throws -> Void = CLIOutput.write,
         writeError: (String) -> Void = CLIOutput.writeError
     ) async throws -> ExitCode {
-        let context = context ?? CLIContext(strictConstraints: strictConstraints)
+        let context = context ?? CLIContext(strictConstraints: strictConstraints, analysisMode: analysisMode)
         let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
-        let report = try await context.engine.analyze(projectPath: resolvedPath)
+        if analysisMode == .singleTarget {
+            let report = try await context.engine.analyze(projectPath: resolvedPath)
+            let rendered = context.render(report, format: format)
+
+            if let output {
+                try writeFile(rendered, URL(fileURLWithPath: output))
+            } else {
+                write(rendered)
+            }
+
+            return ExitCode(report.hasActionableFindings ? 1 : 0)
+        }
+
+        let report = try await context.workspaceEngine.analyze(rootPath: resolvedPath)
         let rendered = context.render(report, format: format)
 
         if let output {
