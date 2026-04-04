@@ -129,11 +129,14 @@ public struct ManifestIndex: @unchecked Sendable {
     }
 
     private func manifestKind(for url: URL) -> DiscoveredManifestKind? {
+        let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
+        let isDirectory = resourceValues?.isDirectory ?? false
+
         switch url.lastPathComponent {
         case "Package.swift":
             return .packageManifest
         case "Package.resolved":
-            return .resolvedFile
+            return isDirectory ? nil : .resolvedFile
         default:
             break
         }
@@ -195,8 +198,12 @@ public struct ManifestIndex: @unchecked Sendable {
 
 enum DiscoveryOrdering {
     static func lessThan(_ lhs: URL, _ rhs: URL) -> Bool {
-        lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
-            || (lhs.lastPathComponent == rhs.lastPathComponent && lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending)
+        let lhsName = lhs.lastPathComponent.lowercased()
+        let rhsName = rhs.lastPathComponent.lowercased()
+        if lhsName != rhsName {
+            return lhsName < rhsName
+        }
+        return lhs.path.lowercased() < rhs.path.lowercased()
     }
 
     static func lessThan(_ lhs: DiscoveredManifest, _ rhs: DiscoveredManifest) -> Bool {
@@ -205,7 +212,7 @@ enum DiscoveryOrdering {
         if lhsPriority != rhsPriority {
             return lhsPriority < rhsPriority
         }
-        return lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
+        return lhs.path.lowercased() < rhs.path.lowercased()
     }
 
     private static func priority(for kind: DiscoveredManifestKind) -> Int {

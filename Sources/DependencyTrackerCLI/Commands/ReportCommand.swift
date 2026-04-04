@@ -58,7 +58,13 @@ struct Report: AsyncParsableCommand {
 
     /// Runs the command and throws the resulting exit code for ArgumentParser.
     func run() async throws {
-        throw try await Self.execute(projectPath: projectPath, format: format, output: output, strictConstraints: strictConstraints)
+        throw try await Self.execute(
+            projectPath: projectPath,
+            analysisMode: analysisMode.coreValue,
+            format: format,
+            output: output,
+            strictConstraints: strictConstraints
+        )
     }
 
     /// Performs the report generation with injectable side effects for CLI tests.
