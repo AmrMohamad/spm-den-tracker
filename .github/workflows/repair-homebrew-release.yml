@@ -27,7 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/v${{ inputs.version }}
           fetch-depth: 0
 
       - name: Set up Swift
@@ -60,10 +59,24 @@ jobs:
           echo "metadata_path=${METADATA_PATH}" >> "${GITHUB_OUTPUT}"
           echo "formula_path=${FORMULA_PATH}" >> "${GITHUB_OUTPUT}"
 
+      - name: Materialize tagged source
+        id: source
+        run: |
+          set -euo pipefail
+          TAG_REF="refs/tags/v${{ steps.meta.outputs.version }}"
+          git rev-parse --verify "${TAG_REF}" >/dev/null
+
+          SOURCE_DIR="${RUNNER_TEMP}/tag-source"
+          rm -rf "${SOURCE_DIR}"
+          git worktree add --detach "${SOURCE_DIR}" "${TAG_REF}"
+
+          echo "tag_ref=${TAG_REF}" >> "${GITHUB_OUTPUT}"
+          echo "source_dir=${SOURCE_DIR}" >> "${GITHUB_OUTPUT}"
+
       - name: Build release CLI from tag
         run: |
           set -euo pipefail
-          bash scripts/prepare_homebrew_release.sh \
+          bash "${{ steps.source.outputs.source_dir }}/scripts/prepare_homebrew_release.sh" \
             --version "${{ steps.meta.outputs.version }}" \
             --output-dir "${{ steps.meta.outputs.output_dir }}" \
             --formula-out "${{ steps.meta.outputs.formula_path }}"
@@ -114,3 +127,12 @@ jobs:
           bash scripts/verify_published_homebrew_release.sh \
             --version "${{ steps.meta.outputs.version }}" \
             --brew-install-canary
+
+      - name: Cleanup tag worktree
+        if: always()
+        run: |
+          set -euo pipefail
+          SOURCE_DIR="${{ steps.source.outputs.source_dir }}"
+          if [[ -n "${SOURCE_DIR}" ]] && [[ -d "${SOURCE_DIR}" ]]; then
+            git worktree remove --force "${SOURCE_DIR}" || rm -rf "${SOURCE_DIR}"
+          fi
