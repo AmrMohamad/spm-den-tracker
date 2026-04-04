@@ -1,0 +1,116 @@
+name: Repair Homebrew Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the v prefix."
+        required: true
+        type: string
+      brew_canary:
+        description: "Run brew install/test after repairing the release and tap."
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-homebrew-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          fetch-depth: 0
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: "6.2"
+
+      - name: Derive repair metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Version must look like x.y.z" >&2
+            exit 1
+          }
+
+          ARCHIVE_NAME="spm-dep-tracker-macos.tar.gz"
+          METADATA_NAME="spm-dep-tracker-release-metadata.json"
+          OUTPUT_DIR="${RUNNER_TEMP}/dist"
+          ARCHIVE_PATH="${OUTPUT_DIR}/v${VERSION}/${ARCHIVE_NAME}"
+          METADATA_PATH="${OUTPUT_DIR}/v${VERSION}/${METADATA_NAME}"
+          FORMULA_PATH="${RUNNER_TEMP}/tap-formula/spm-dep-tracker.rb"
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "archive_name=${ARCHIVE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "metadata_name=${METADATA_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "output_dir=${OUTPUT_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "archive_path=${ARCHIVE_PATH}" >> "${GITHUB_OUTPUT}"
+          echo "metadata_path=${METADATA_PATH}" >> "${GITHUB_OUTPUT}"
+          echo "formula_path=${FORMULA_PATH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release CLI from tag
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_homebrew_release.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --output-dir "${{ steps.meta.outputs.output_dir }}" \
+            --formula-out "${{ steps.meta.outputs.formula_path }}"
+
+      - name: Publish or repair GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/publish_homebrew_release_assets.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --source-owner AmrMohamad \
+            --source-repo spm-den-tracker \
+            --archive-path "${{ steps.meta.outputs.archive_path }}" \
+            --archive-name "${{ steps.meta.outputs.archive_name }}" \
+            --metadata-path "${{ steps.meta.outputs.metadata_path }}" \
+            --metadata-name "${{ steps.meta.outputs.metadata_name }}"
+
+      - name: Sync dedicated Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash scripts/sync_homebrew_tap.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --source-owner AmrMohamad \
+            --source-repo spm-den-tracker \
+            --tap-owner AmrMohamad \
+            --tap-repo homebrew-spm-den-tracker \
+            --archive-name "${{ steps.meta.outputs.archive_name }}"
+
+      - name: Verify repaired release integrity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          set -euo pipefail
+          bash scripts/verify_published_homebrew_release.sh \
+            --version "${{ steps.meta.outputs.version }}"
+
+      - name: Run brew install canary
+        if: ${{ inputs.brew_canary }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          set -euo pipefail
+          bash scripts/verify_published_homebrew_release.sh \
+            --version "${{ steps.meta.outputs.version }}" \
+            --brew-install-canary

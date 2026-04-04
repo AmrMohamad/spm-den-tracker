@@ -45,7 +45,7 @@ Protect the release channel at the repository level:
 
 - add a tag ruleset for `v*` that restricts tag creation, updates, and deletions, and blocks force pushes except for the release maintainer path
 - enable immutable releases in repository settings so future release assets and metadata cannot be edited after publication
-- never move or recreate an existing release tag; if a release is bad, cut the next patch version instead
+- never move or recreate an existing release tag; if a release is bad, repair the published assets in place only when the tag still points to the original commit, otherwise cut the next patch version instead
 
 ## Maintainer Flow
 
@@ -90,21 +90,34 @@ The release workflow now also:
 - rejects reruns that try to mutate a published release from a moved tag
 - verifies the public release URL, tap formula checksum, and `brew install` path after tap sync succeeds
 
-4. If you need to recover or backfill the dedicated tap manually after the release asset exists:
+4. If you need to repair a published release or backfill the dedicated tap after a release has drifted:
+
+```bash
+gh workflow run repair-homebrew-release.yml -f version=0.1.0 -f brew_canary=true
+```
+
+This repair path:
+
+- checks out the tagged source for `v0.1.0`
+- rebuilds the archive and release metadata from that exact tag
+- uploads only missing release assets and refuses to overwrite existing mismatched assets
+- re-syncs the dedicated tap from the published archive checksum
+- reruns the public integrity verifier and optional `brew install` canary
+
+It requires:
+
+- authenticated `gh` access
+- a token with write access to `AmrMohamad/homebrew-spm-den-tracker`; for a fine-grained PAT, grant `Contents: Read and write`
+- push permission to `AmrMohamad/homebrew-spm-den-tracker`
+- the `HOMEBREW_TAP_TOKEN` secret to be present for the workflow run
+
+5. If the release assets are healthy and only the tap needs manual recovery:
 
 ```bash
 ./scripts/sync_homebrew_tap.sh --version 0.1.0
 ```
 
-This recovery path requires:
-
-- the GitHub release asset for `v0.1.0` to already exist
-- authenticated `gh` access
-- a token with write access to `AmrMohamad/homebrew-spm-den-tracker`; for a fine-grained PAT, grant `Contents: Read and write`
-- push permission to `AmrMohamad/homebrew-spm-den-tracker`
-- the script configures git HTTPS auth from the active `gh` credentials before it clones or pushes the tap repo
-
-5. Verify the public install path:
+6. Verify the public install path:
 
 ```bash
 brew install AmrMohamad/spm-den-tracker/spm-dep-tracker
