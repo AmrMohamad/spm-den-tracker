@@ -17,11 +17,17 @@ struct Doctor: AsyncParsableCommand {
         - whether dependencies are pinned to version, branch, revision, or local path
         - which declared dependency rules come from the project or manifest
         - whether newer stable upstream versions are available for version-pinned remote packages
+        - when explicitly enabled, workspace-level findings across multiple manifests
 
         Accepted input forms:
         - `/path/to/MyApp.xcodeproj`
         - `/path/to/repo-root` when that directory contains exactly one `.xcodeproj`
         - `/path/to/Package.resolved`
+
+        Analysis mode:
+        - `single-target` preserves the current one-report behavior
+        - `auto` lets the engine choose workspace-aware behavior for directory inputs
+        - `monorepo` forces workspace-aware analysis
 
         Exit codes:
         - `0` when only informational findings were produced
@@ -33,6 +39,10 @@ struct Doctor: AsyncParsableCommand {
     /// Path to the project bundle, project directory, or resolved file to audit.
     @Argument(help: "Path to an `.xcodeproj`, a directory containing one `.xcodeproj`, or a direct `Package.resolved` file.")
     var projectPath: String
+
+    /// Selects how the command should interpret the input path.
+    @Option(name: .long, help: "Select the analysis mode: `auto`, `monorepo`, or `single-target`.")
+    var analysisMode: AnalysisModeOption = .singleTarget
 
     /// Promotes declared-constraint findings into actionable failures.
     @Flag(name: .long, help: "Treat declared-constraint findings as actionable failures.")
@@ -53,14 +63,21 @@ struct Doctor: AsyncParsableCommand {
     /// - Returns: Exit code `1` when the report contains actionable findings, otherwise `0`.
     static func execute(
         projectPath: String,
+        analysisMode: AnalysisMode = .singleTarget,
         strictConstraints: Bool = false,
         context: CLIContext? = nil,
         write: (String) -> Void = CLIOutput.write,
         writeError: (String) -> Void = CLIOutput.writeError
     ) async throws -> ExitCode {
-        let context = context ?? CLIContext(strictConstraints: strictConstraints)
+        let context = context ?? CLIContext(strictConstraints: strictConstraints, analysisMode: analysisMode)
         let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
-        let report = try await context.engine.analyze(projectPath: resolvedPath)
+        if analysisMode == .singleTarget {
+            let report = try await context.engine.analyze(projectPath: resolvedPath)
+            write(context.tableFormatter.format(report))
+            return ExitCode(report.hasActionableFindings ? 1 : 0)
+        }
+
+        let report = try await context.workspaceEngine.analyze(rootPath: resolvedPath)
         write(context.tableFormatter.format(report))
         return ExitCode(report.hasActionableFindings ? 1 : 0)
     }

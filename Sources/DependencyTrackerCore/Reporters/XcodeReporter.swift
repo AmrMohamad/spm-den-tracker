@@ -13,4 +13,23 @@ public struct XcodeReporter: ReportFormatter {
         }
         .joined(separator: "\n")
     }
+
+    /// Formats aggregate workspace findings as compiler-style diagnostics.
+    public func format(_ report: WorkspaceReport) -> String {
+        var lines: [String] = []
+
+        for scoped in WorkspaceReportSupport.scopedFindings(report) {
+            let finding = scoped.finding
+            let level = finding.severity == .error ? "error" : "warning"
+            lines.append("\(scoped.scope): \(level): [\(finding.category.rawValue)] \(finding.message) \(finding.recommendation)")
+        }
+
+        for scoped in WorkspaceReportSupport.scopedPartialFailures(report) {
+            let failure = scoped.failure
+            let level = failure.severity == .error ? "error" : "warning"
+            lines.append("\(scoped.scope): \(level): [partialFailure] [\(failure.stage.rawValue)] \(failure.message)")
+        }
+
+        return lines.joined(separator: "\n")
+    }
 }
