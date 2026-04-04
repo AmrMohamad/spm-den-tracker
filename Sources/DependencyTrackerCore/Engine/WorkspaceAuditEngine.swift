@@ -104,24 +104,37 @@ public struct WorkspaceAuditEngine: Sendable {
         case .monorepo:
             return false
         case .auto:
-            return false
+            do {
+                _ = try trackerEngine.locateAuditTarget(at: rootPath)
+                return true
+            } catch DependencyTrackerError.ambiguousProjectPath {
+                return false
+            } catch DependencyTrackerError.invalidPath {
+                return false
+            } catch {
+                return true
+            }
         }
     }
 
     /// Wraps the existing single-target engine output into one workspace report.
     private func wrapSingleTarget(path: String, analysisMode: AnalysisMode) async throws -> WorkspaceReport {
+        let auditTarget = try trackerEngine.locateAuditTarget(at: path)
         let report = try await trackerEngine.analyze(projectPath: path)
+        let discoveredPath = auditTarget.projectFileURL?.path
+            ?? auditTarget.manifestURL?.path
+            ?? auditTarget.resolvedFileURL.path
         let discovered = DiscoveredManifest(
-            path: report.projectPath,
-            kind: inferManifestKind(from: report.projectPath),
+            path: discoveredPath,
+            kind: inferManifestKind(from: discoveredPath),
             resolvedFilePath: report.resolvedFilePath,
             ownershipKey: report.resolvedFilePath
         )
         let context = ResolutionContext(
             key: report.resolvedFilePath,
-            displayPath: report.projectPath,
+            displayPath: discoveredPath,
             resolvedFilePath: report.resolvedFilePath,
-            manifestPaths: [report.projectPath]
+            manifestPaths: [discoveredPath]
         )
         let contextReport = ResolutionContextReport(
             context: context,
