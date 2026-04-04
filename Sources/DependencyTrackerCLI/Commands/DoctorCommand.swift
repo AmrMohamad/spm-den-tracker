@@ -50,7 +50,11 @@ struct Doctor: AsyncParsableCommand {
 
     /// Runs the command and throws the resulting exit code for ArgumentParser.
     func run() async throws {
-        throw try await Self.execute(projectPath: projectPath, strictConstraints: strictConstraints)
+        throw try await Self.execute(
+            projectPath: projectPath,
+            analysisMode: analysisMode.coreValue,
+            strictConstraints: strictConstraints
+        )
     }
 
     /// Performs the audit with injectable writers so CLI behavior can be regression tested.
