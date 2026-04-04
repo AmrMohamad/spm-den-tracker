@@ -1,11 +1,10 @@
 import AppKit
 import Combine
 import DependencyTrackerCore
-import UniformTypeIdentifiers
 
 @MainActor
 /// Builds the AppKit interface and binds it to `TrackerViewModel`.
-final class MainWindowController: NSWindowController {
+final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     /// The source of truth for all user-visible analysis state.
     private let viewModel: TrackerViewModel
     /// Combine subscriptions that keep the UI in sync with the view model.
@@ -226,9 +225,8 @@ final class MainWindowController: NSWindowController {
         panel.allowsMultipleSelection = false
         panel.treatsFilePackagesAsDirectories = false
         panel.resolvesAliases = true
-        if let xcodeProjectType = UTType(filenameExtension: "xcodeproj") {
-            panel.allowedContentTypes = [xcodeProjectType]
-        }
+        panel.delegate = self
+        panel.message = ProjectSelectionValidator.selectionDescription
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
             viewModel.projectPath = url.path
@@ -281,5 +279,22 @@ final class MainWindowController: NSWindowController {
                 errorLabel.isHidden = false
             }
         }
+    }
+}
+
+extension MainWindowController {
+    /// Enables only the item kinds that the dependency tracker can consume.
+    func panel(_ sender: Any, shouldEnable url: URL) -> Bool {
+        guard url.isFileURL else { return true }
+        return ProjectSelectionValidator.isSupported(url: url)
+    }
+
+    /// Rejects unsupported manual file-name entries with a user-visible explanation.
+    func panel(_ sender: Any, validate url: URL, error outError: AutoreleasingUnsafeMutablePointer<NSError?>?) -> Bool {
+        guard ProjectSelectionValidator.isSupported(url: url) else {
+            outError?.pointee = ProjectSelectionValidator.validationError()
+            return false
+        }
+        return true
     }
 }

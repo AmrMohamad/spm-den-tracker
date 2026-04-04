@@ -2,6 +2,33 @@ import Combine
 import DependencyTrackerCore
 import Foundation
 
+/// Centralizes the open-panel contract so the GUI picker matches the engine's accepted inputs.
+enum ProjectSelectionValidator {
+    static let selectionDescription = "Choose an Xcode project, a folder containing one Xcode project, or a Package.resolved file."
+
+    /// Accepts direct `.xcodeproj` packages, direct `Package.resolved` files, and directories.
+    static func isSupported(url: URL, fileManager: FileManager = .default) -> Bool {
+        guard url.isFileURL else { return false }
+        if url.pathExtension == "xcodeproj" || url.lastPathComponent == "Package.resolved" {
+            return true
+        }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return false
+        }
+        return isDirectory.boolValue
+    }
+
+    static func validationError() -> NSError {
+        NSError(
+            domain: "DependencyTrackerApp.ProjectSelectionValidator",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: selectionDescription]
+        )
+    }
+}
+
 @MainActor
 /// Main-window view model that coordinates user input, analysis state, and export actions.
 final class TrackerViewModel: ObservableObject {
