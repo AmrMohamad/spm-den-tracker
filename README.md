@@ -1,6 +1,6 @@
 # SPM Dependency Tracker
 
-SPM Dependency Tracker audits the dependency lock state of Xcode projects that use Swift Package Manager.
+SPM Dependency Tracker audits the dependency lock state of Xcode projects and workspace roots that use Swift Package Manager.
 It is built for the practical failure modes teams hit in CI and shared development environments:
 
 - `Package.resolved` missing, untracked, or accidentally ignored
@@ -8,6 +8,7 @@ It is built for the practical failure modes teams hit in CI and shared developme
 - dependencies pinned to branches, revisions, or local paths instead of reproducible versions
 - declared package requirements drifting from the resolved versions in source control
 - upstream stable releases existing beyond the current resolved version
+- repository roots that need recursive manifest discovery and aggregate reporting
 
 The repository currently ships three deliverables:
 
@@ -19,7 +20,7 @@ For AI-assisted workflows, the repo also includes local skill definitions for Co
 
 ## What The Audit Covers
 
-For a given Xcode project or `Package.resolved`, the engine assembles one dependency report with:
+For a given Xcode project, repository root, or `Package.resolved`, the engine assembles one dependency report or one aggregate workspace report with:
 
 - resolved-file tracking status: `tracked`, `untracked`, `gitignored`, or `missing`
 - `Package.resolved` schema version and compatibility classification
@@ -27,8 +28,10 @@ For a given Xcode project or `Package.resolved`, the engine assembles one depend
 - declared package requirements discovered from the package manifest or Xcode project
 - constraint drift analysis between declared rules, resolved versions, and the latest allowed version
 - outdated checks against the latest stable upstream semantic version tags
+- workspace discovery, resolution-context grouping, and partial-failure visibility for repository-root analysis
+- graph output with bounded certainty labels so the tool can distinguish metadata-only, partially enriched, and complete graph data
 
-The result is shared across every output surface in the repo: terminal table, Markdown, JSON, Xcode-style diagnostics, JUnit XML, and the macOS UI.
+The result is shared across every output surface in the repo: terminal table, Markdown, JSON, Xcode-style diagnostics, JUnit XML, graph output, and the macOS UI.
 
 ## Supported Inputs
 
@@ -37,8 +40,36 @@ All CLI commands accept the same input forms:
 - a direct `.xcodeproj` path
 - a directory that contains exactly one immediate `.xcodeproj`
 - a direct `Package.resolved` path
+- a repository root when `--analysis-mode monorepo` is enabled
 
 If a directory contains more than one immediate `.xcodeproj`, the path is treated as ambiguous and the command fails intentionally.
+
+## Analysis Modes
+
+The workspace feature adds three explicit analysis modes:
+
+- `single-target`: preserve the current one-project or one-lockfile behavior
+- `monorepo`: recursively discover auditable manifests beneath a repository root
+- `auto`: choose the narrowest safe mode from the input shape
+
+Use `--analysis-mode single-target` to force the old behavior and `--analysis-mode monorepo` to force recursive discovery.
+
+## Workspace Output
+
+Workspace reports add:
+
+- discovered manifests and their ownership keys
+- per-context reports for each resolution context
+- workspace-level aggregate findings
+- partial failures that did not block the entire run
+
+Graph output is labeled by certainty:
+
+- `metadataOnly`: the graph only knows node metadata from `Package.resolved`
+- `partiallyEnriched`: some edges came from stronger sources, but not all of the graph is fully proven
+- `complete`: the graph has enough edge provenance to support graph-aware analysis with confidence
+
+`Package.resolved` alone does not provide graph topology. It provides resolved node metadata; topology comes from manifests, workspace structure, or dependency-enrichment sources.
 
 ## Requirements
 
@@ -62,6 +93,14 @@ Inspect a project:
 swift run spm-dep-tracker doctor /path/to/MyApp.xcodeproj
 ```
 
+Inspect a repository root:
+
+```bash
+swift run spm-dep-tracker doctor /path/to/repo-root --analysis-mode monorepo
+swift run spm-dep-tracker report /path/to/repo-root --analysis-mode monorepo --format markdown
+swift run spm-dep-tracker graph /path/to/repo-root --analysis-mode monorepo --format mermaid
+```
+
 Generate Markdown for a pull request or engineering note:
 
 ```bash
@@ -79,6 +118,14 @@ Verify only whether the lockfile is tracked by git:
 
 ```bash
 swift run spm-dep-tracker check-tracking /path/to/MyApp.xcodeproj
+```
+
+Graph the dependency topology:
+
+```bash
+swift run spm-dep-tracker graph /path/to/MyApp.xcodeproj --format mermaid
+swift run spm-dep-tracker graph /path/to/repo-root --analysis-mode monorepo --format dot --output ./Reports/dependencies.dot
+swift run spm-dep-tracker graph /path/to/repo-root --analysis-mode monorepo --format json --output ./Reports/dependencies.json
 ```
 
 ## Installation
@@ -166,7 +213,7 @@ Install the tracked git hooks once per clone:
 make setup-hooks
 ```
 
-After that, pushing a release tag such as `v0.1.0` from either the terminal or Fork runs a local preflight before the tag is sent to GitHub:
+After that, pushing a release tag such as `v0.2.0` from either the terminal or Fork runs a local preflight before the tag is sent to GitHub:
 
 - the hook detects pushed `v*` tags only
 - release inputs are rendered to temporary paths, not the repo
@@ -177,8 +224,8 @@ Creating a tag locally does not trigger anything by itself; the automation bound
 
 Emergency bypasses:
 
-- `git push --no-verify origin v0.1.0`
-- `SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT=1 git push origin v0.1.0`
+- `git push --no-verify origin v0.2.0`
+- `SPM_DEP_TRACKER_SKIP_TAG_PREFLIGHT=1 git push origin v0.2.0`
 
 ## CLI Reference
 
@@ -208,6 +255,7 @@ spm-dep-tracker report /path/to/MyApp.xcodeproj --format markdown
 spm-dep-tracker report /path/to/MyApp.xcodeproj --format json --output ./Reports/dependencies.json
 spm-dep-tracker report /path/to/MyApp.xcodeproj --format xcode
 spm-dep-tracker report /path/to/MyApp.xcodeproj --format junit --strict-constraints
+spm-dep-tracker report /path/to/repo-root --analysis-mode monorepo --format markdown
 ```
 
 Supported formats:
@@ -222,6 +270,28 @@ Exit codes:
 
 - `0`: only informational findings
 - `1`: warnings or errors were found
+- `65`: input path does not exist
+
+### `graph`
+
+Outputs dependency topology in a graph-friendly format.
+
+```bash
+spm-dep-tracker graph /path/to/MyApp.xcodeproj --format mermaid
+spm-dep-tracker graph /path/to/repo-root --analysis-mode monorepo --format dot
+spm-dep-tracker graph /path/to/repo-root --analysis-mode monorepo --format json
+```
+
+Supported formats:
+
+- `mermaid`
+- `dot`
+- `json`
+
+Exit codes:
+
+- `0`: graph output rendered successfully
+- `1`: warnings, errors, or partial-failure findings were produced
 - `65`: input path does not exist
 
 ### `check-tracking`
@@ -257,6 +327,8 @@ Use it when you want drift between declared requirements and resolved versions t
 - `json`: machine-readable export for tooling or dashboards
 - `xcode`: compiler-style warning and error lines for Xcode and CI logs
 - `junit`: XML suite with actionable findings surfaced as failures
+- `mermaid`: graph output for rendered diagrams and PR descriptions
+- `dot`: Graphviz-compatible graph output
 
 ## Agent Skills
 
