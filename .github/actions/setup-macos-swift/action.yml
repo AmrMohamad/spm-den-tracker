@@ -1,0 +1,14 @@
+name: Setup macOS Swift
+description: Select an installed Xcode whose bundled Swift matches the requested major.minor version.
+
+inputs:
+  swift-version:
+    description: Requested Swift major.minor version, for example 6.2.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode for requested Swift
+      shell: bash
+      run: "${{ github.action_path }}/setup.sh '${{ inputs.swift-version }}'"
