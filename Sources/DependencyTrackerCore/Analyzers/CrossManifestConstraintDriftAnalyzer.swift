@@ -126,10 +126,19 @@ private struct RequirementProfile: Hashable {
     let kind: DeclaredRequirementKind
     /// The optional semantic version used by version-based declarations.
     let version: Version?
+    /// The lower bound text as declared.
+    let lowerBound: String?
+    /// The upper bound text as declared.
+    let upperBound: String?
+    /// The branch, revision, or local reference as declared.
+    let reference: String?
 
     /// Creates a requirement profile from a declaration.
     init(requirement: DeclaredRequirement) {
         self.kind = requirement.kind
+        self.lowerBound = requirement.lowerBound
+        self.upperBound = requirement.upperBound
+        self.reference = requirement.reference
         switch requirement.kind {
         case .exact, .upToNextMajor, .upToNextMinor, .range:
             self.version = requirement.lowerBound.flatMap(Version.init(tolerant:))

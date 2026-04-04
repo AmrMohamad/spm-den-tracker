@@ -26,6 +26,10 @@ struct DiscoveryContextTests {
             atomically: true,
             encoding: .utf8
         )
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("Fake/Package.resolved", isDirectory: true),
+            withIntermediateDirectories: true
+        )
 
         let ignoredWorkspace = root.appendingPathComponent("Ignored.xcworkspace", isDirectory: true)
         try FileManager.default.createDirectory(at: ignoredWorkspace, withIntermediateDirectories: true)
@@ -61,6 +65,7 @@ struct DiscoveryContextTests {
         let resolvedEntries = discovered.filter { $0.kind == .resolvedFile }
         #expect(resolvedEntries.count == 1)
         #expect(resolvedEntries.first?.ownershipKey == packageRoot.appendingPathComponent("Package.resolved").standardizedFileURL.resolvingSymlinksInPath().path)
+        #expect(!discovered.map(\.path).contains(root.appendingPathComponent("Fake/Package.resolved").standardizedFileURL.resolvingSymlinksInPath().path))
 
         let xcodeprojEntry = discovered.first { $0.kind == .xcodeproj }
         #expect(
