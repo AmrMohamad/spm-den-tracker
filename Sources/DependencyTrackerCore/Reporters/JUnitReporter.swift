@@ -27,6 +27,39 @@ public struct JUnitReporter: ReportFormatter {
         """
     }
 
+    /// Formats aggregate workspace findings as a single CI suite.
+    public func format(_ report: WorkspaceReport) -> String {
+        let actionableFindings = WorkspaceReportSupport.scopedFindings(report).filter { $0.finding.isActionable }
+        let actionableFailures = WorkspaceReportSupport.scopedPartialFailures(report).filter { $0.failure.severity != .info }
+
+        let findingCases = actionableFindings.enumerated().map { index, finding in
+            """
+              <testcase classname="spm-dep-tracker.\(finding.finding.category.rawValue)" name="finding-\(index + 1)">
+                <failure message="\(escape(finding.scope))">\(escape("\(finding.finding.message) - \(finding.finding.recommendation)"))</failure>
+              </testcase>
+            """
+        }
+
+        let failureCases = actionableFailures.enumerated().map { index, failure in
+            """
+              <testcase classname="spm-dep-tracker.partialFailure" name="partial-failure-\(index + 1)">
+                <failure message="\(escape(failure.scope))">\(escape(WorkspaceReportSupport.partialFailureSummary(failure.failure)))</failure>
+              </testcase>
+            """
+        }
+
+        let testCases = (findingCases + failureCases).joined(separator: "\n")
+        let systemOut = escape(TableReporter().format(report))
+
+        return """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <testsuite name="SPMDependencyTrackerWorkspace" tests="\(actionableFindings.count + actionableFailures.count)" failures="\(actionableFindings.count + actionableFailures.count)">
+        \(testCases)
+          <system-out>\(systemOut)</system-out>
+        </testsuite>
+        """
+    }
+
     /// Escapes XML-sensitive characters inside report text.
     private func escape(_ string: String) -> String {
         string

@@ -59,6 +59,103 @@ struct CLITests {
     }
 
     @Test
+    func reportSupportsWorkspaceAnalysisMode() async throws {
+        let projectURL = try makeProjectDirectory()
+        let outputURL = projectURL.deletingLastPathComponent()
+            .appendingPathComponent("Reports", isDirectory: true)
+            .appendingPathComponent("workspace-report.json")
+
+        let exitCode = try await Report.execute(
+            projectPath: projectURL.path,
+            analysisMode: .auto,
+            format: .json,
+            output: outputURL.path,
+            write: { _ in },
+            writeError: { _ in }
+        )
+
+        let contents = try String(contentsOf: outputURL, encoding: .utf8)
+        #expect(exitCode == ExitCode(1))
+        #expect(contents.contains("\"analysisMode\""))
+        #expect(contents.contains("\"discoveredManifests\""))
+    }
+
+    @Test
+    func doctorSupportsWorkspaceAnalysisMode() async throws {
+        let projectURL = try makeProjectDirectory()
+        var outputs: [String] = []
+
+        let exitCode = try await Doctor.execute(
+            projectPath: projectURL.path,
+            analysisMode: .auto,
+            write: { outputs.append($0) },
+            writeError: { _ in }
+        )
+
+        #expect(exitCode == ExitCode(1))
+        #expect(outputs.joined(separator: "\n").contains("SPM Dependency Tracker Workspace"))
+    }
+
+    @Test
+    func graphCommandRendersMermaid() async throws {
+        let projectURL = try makeProjectDirectory()
+        var outputs: [String] = []
+
+        let exitCode = try await Graph.execute(
+            projectPath: projectURL.path,
+            analysisMode: .auto,
+            format: .mermaid,
+            output: nil,
+            write: { outputs.append($0) },
+            writeError: { _ in }
+        )
+
+        #expect(exitCode == ExitCode(1))
+        #expect(outputs.joined(separator: "\n").contains("graph TD"))
+        #expect(outputs.joined(separator: "\n").contains(projectURL.path))
+    }
+
+    @Test
+    func graphCommandRendersDot() async throws {
+        let projectURL = try makeProjectDirectory()
+        var outputs: [String] = []
+
+        let exitCode = try await Graph.execute(
+            projectPath: projectURL.path,
+            analysisMode: .auto,
+            format: .dot,
+            output: nil,
+            write: { outputs.append($0) },
+            writeError: { _ in }
+        )
+
+        #expect(exitCode == ExitCode(1))
+        #expect(outputs.joined(separator: "\n").contains("digraph WorkspaceGraph"))
+    }
+
+    @Test
+    func graphCommandRendersJSON() async throws {
+        let projectURL = try makeProjectDirectory()
+        let outputURL = projectURL.deletingLastPathComponent()
+            .appendingPathComponent("Reports", isDirectory: true)
+            .appendingPathComponent("workspace-graph.json")
+
+        let exitCode = try await Graph.execute(
+            projectPath: projectURL.path,
+            analysisMode: .auto,
+            format: .json,
+            output: outputURL.path,
+            write: { _ in },
+            writeError: { _ in }
+        )
+
+        let contents = try String(contentsOf: outputURL, encoding: .utf8)
+        #expect(exitCode == ExitCode(1))
+        #expect(contents.contains("\"nodes\""))
+        #expect(contents.contains("\"edges\""))
+    }
+
+    @Test
     func checkTrackingRendersMissingStatus() async throws {
         let projectURL = try makeProjectDirectory()
         var outputs: [String] = []
