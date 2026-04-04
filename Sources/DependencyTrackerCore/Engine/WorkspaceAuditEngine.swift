@@ -8,9 +8,6 @@ public struct WorkspaceAuditEngine: Sendable {
     private let trackerEngine: TrackerEngine
     private let manifestIndex: ManifestIndex
     private let resolutionContextDetector: ResolutionContextDetector
-    private let workspaceReportAssembler: WorkspaceReportAssembler
-    private let crossManifestConstraintDriftAnalyzer: CrossManifestConstraintDriftAnalyzer
-    private let crossContextResolvedDriftAnalyzer: CrossContextResolvedDriftAnalyzer
 
     /// Creates a workspace engine backed by the supplied single-target engine.
     public init(
@@ -18,37 +15,13 @@ public struct WorkspaceAuditEngine: Sendable {
         trackerEngine: TrackerEngine? = nil,
         manifestIndex: ManifestIndex? = nil
     ) {
-        self.init(
-            configuration: configuration,
-            trackerEngine: trackerEngine,
-            manifestIndex: manifestIndex,
-            resolutionContextDetector: ResolutionContextDetector(),
-            workspaceReportAssembler: WorkspaceReportAssembler(),
-            crossManifestConstraintDriftAnalyzer: CrossManifestConstraintDriftAnalyzer(),
-            crossContextResolvedDriftAnalyzer: CrossContextResolvedDriftAnalyzer()
-        )
-    }
-
-    /// Internal dependency-injection initializer used by tests and integration seams.
-    init(
-        configuration: TrackerConfiguration,
-        trackerEngine: TrackerEngine? = nil,
-        manifestIndex: ManifestIndex? = nil,
-        resolutionContextDetector: ResolutionContextDetector = ResolutionContextDetector(),
-        workspaceReportAssembler: WorkspaceReportAssembler = WorkspaceReportAssembler(),
-        crossManifestConstraintDriftAnalyzer: CrossManifestConstraintDriftAnalyzer = CrossManifestConstraintDriftAnalyzer(),
-        crossContextResolvedDriftAnalyzer: CrossContextResolvedDriftAnalyzer = CrossContextResolvedDriftAnalyzer()
-    ) {
         self.configuration = configuration
         self.trackerEngine = trackerEngine ?? TrackerEngine(configuration: configuration)
         self.manifestIndex = manifestIndex ?? ManifestIndex(
             maxDepth: configuration.maxDiscoveryDepth,
             ignoreFileName: configuration.ignoreFileName
         )
-        self.resolutionContextDetector = resolutionContextDetector
-        self.workspaceReportAssembler = workspaceReportAssembler
-        self.crossManifestConstraintDriftAnalyzer = crossManifestConstraintDriftAnalyzer
-        self.crossContextResolvedDriftAnalyzer = crossContextResolvedDriftAnalyzer
+        self.resolutionContextDetector = ResolutionContextDetector()
     }
 
     /// Builds a workspace report for the supplied root path.
@@ -102,18 +75,14 @@ public struct WorkspaceAuditEngine: Sendable {
             }
         }
 
-        let aggregateFindings =
-            crossManifestConstraintDriftAnalyzer.analyze(contextReports)
-            + crossContextResolvedDriftAnalyzer.analyze(contextReports)
-
-        return workspaceReportAssembler.assemble(
+        return WorkspaceReport(
             rootPath: rootPath,
             generatedAt: Date(),
             analysisMode: configuration.analysisMode,
             discoveredManifests: discoveredManifests,
-            contextReports: contextReports,
-            aggregateFindings: aggregateFindings,
-            partialFailures: aggregatePartialFailures
+            contexts: contextReports.sorted { $0.context.displayPath < $1.context.displayPath },
+            aggregateFindings: [],
+            partialFailures: aggregatePartialFailures.sorted { $0.subjectPath < $1.subjectPath }
         )
     }
 
@@ -135,24 +104,37 @@ public struct WorkspaceAuditEngine: Sendable {
         case .monorepo:
             return false
         case .auto:
-            return false
+            do {
+                _ = try trackerEngine.locateAuditTarget(at: rootPath)
+                return true
+            } catch DependencyTrackerError.ambiguousProjectPath {
+                return false
+            } catch DependencyTrackerError.invalidPath {
+                return false
+            } catch {
+                return true
+            }
         }
     }
 
     /// Wraps the existing single-target engine output into one workspace report.
     private func wrapSingleTarget(path: String, analysisMode: AnalysisMode) async throws -> WorkspaceReport {
+        let auditTarget = try trackerEngine.locateAuditTarget(at: path)
         let report = try await trackerEngine.analyze(projectPath: path)
+        let discoveredPath = auditTarget.projectFileURL?.path
+            ?? auditTarget.manifestURL?.path
+            ?? auditTarget.resolvedFileURL.path
         let discovered = DiscoveredManifest(
-            path: report.projectPath,
-            kind: inferManifestKind(from: report.projectPath),
+            path: discoveredPath,
+            kind: inferManifestKind(from: discoveredPath),
             resolvedFilePath: report.resolvedFilePath,
             ownershipKey: report.resolvedFilePath
         )
         let context = ResolutionContext(
             key: report.resolvedFilePath,
-            displayPath: report.projectPath,
+            displayPath: discoveredPath,
             resolvedFilePath: report.resolvedFilePath,
-            manifestPaths: [report.projectPath]
+            manifestPaths: [discoveredPath]
         )
         let contextReport = ResolutionContextReport(
             context: context,
@@ -161,12 +143,12 @@ public struct WorkspaceAuditEngine: Sendable {
             partialFailures: []
         )
 
-        return workspaceReportAssembler.assemble(
+        return WorkspaceReport(
             rootPath: path,
             generatedAt: report.generatedAt,
             analysisMode: analysisMode,
             discoveredManifests: [discovered],
-            contextReports: [contextReport],
+            contexts: [contextReport],
             aggregateFindings: [],
             partialFailures: []
         )

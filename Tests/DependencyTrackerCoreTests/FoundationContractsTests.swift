@@ -54,6 +54,29 @@ struct FoundationContractsTests {
         #expect(workspaceReport.contexts.count == 1)
         #expect(workspaceReport.contexts[0].reports.count == 1)
         #expect(workspaceReport.contexts[0].reports[0].resolvedFilePath == fixturePath)
+        #expect(workspaceReport.discoveredManifests[0].path == fixturePath)
+        #expect(workspaceReport.contexts[0].context.displayPath == fixturePath)
+    }
+
+    @Test
+    func workspaceAuditEngineAutoModeKeepsSingleProjectDirectoriesOnSingleTargetPath() async throws {
+        let projectURL = try makeProjectDirectory()
+        let configuration = TrackerConfiguration(
+            analysisMode: .auto,
+            checkOutdated: false,
+            checkDeclaredConstraints: false,
+            timeout: 2
+        )
+
+        let workspaceReport = try await WorkspaceAuditEngine(configuration: configuration)
+            .analyze(rootPath: projectURL.deletingLastPathComponent().path)
+
+        #expect(workspaceReport.analysisMode == .auto)
+        #expect(workspaceReport.discoveredManifests.count == 1)
+        #expect(workspaceReport.discoveredManifests[0].kind == .xcodeproj)
+        #expect(workspaceReport.contexts.count == 1)
+        #expect(workspaceReport.contexts[0].context.displayPath.temporaryPathComparable == projectURL.path.temporaryPathComparable)
+        #expect(workspaceReport.contexts[0].reports[0].projectPath == projectURL.deletingLastPathComponent().path)
     }
 }
 
@@ -71,4 +94,18 @@ private func namedResolvedFixtureCopyURL() throws -> URL {
     let destination = directory.appendingPathComponent("Package.resolved")
     try FileManager.default.copyItem(at: fixtureURL(named: "Package.resolved.v3.json"), to: destination)
     return destination.standardizedFileURL.resolvingSymlinksInPath()
+}
+
+private func makeProjectDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let projectURL = directory.appendingPathComponent("Sample.xcodeproj", isDirectory: true)
+    try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
+    return projectURL.standardizedFileURL.resolvingSymlinksInPath()
+}
+
+private extension String {
+    var temporaryPathComparable: String {
+        hasPrefix("/private/var/") ? String(dropFirst("/private".count)) : self
+    }
 }
