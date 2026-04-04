@@ -1,0 +1,3 @@
+# Extra repository-local ignore entries for discovery tests.
+Ignored.xcworkspace
+DerivedData/IgnoreMe

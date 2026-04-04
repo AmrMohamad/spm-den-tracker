@@ -14,7 +14,7 @@ This document tracks the upstream work needed before that submission is credible
 
 ## Required Readiness Items
 
-- Stable semantic version tags and repeatable releases.
+- Stable semantic version tags and repeatable releases, currently anchored on `0.2.0` / `v0.2.0`.
 - A top-level `LICENSE` file.
 - A clear homepage and maintainable public docs.
 - A source-build-friendly formula path from a tagged release.
