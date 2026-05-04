@@ -20,12 +20,20 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private let markdownButton = NSButton(title: "Export Markdown", target: nil, action: nil)
     /// Button that exports the latest report as JSON.
     private let jsonButton = NSButton(title: "Export JSON", target: nil, action: nil)
+    /// Button that exports the latest workspace graph as Mermaid.
+    private let graphButton = NSButton(title: "Export Graph", target: nil, action: nil)
     /// Spinner shown while the audit is running.
     private let progressIndicator = NSProgressIndicator()
     /// Inline error label used for validation and runtime failures.
     private let errorLabel = NSTextField(labelWithString: "")
     /// Summary label shown above the tables.
     private let summaryLabel = NSTextField(labelWithString: "No report loaded.")
+    /// Picker used to focus the tables on one workspace context.
+    private let contextPopup = NSPopUpButton()
+    /// Tab container for table details and Mermaid graph preview.
+    private let tabView = NSTabView()
+    /// Read-only text view that previews Mermaid graph output.
+    private let graphTextView = NSTextView()
     /// Table that renders report findings.
     private let findingsTableView = FindingsTableView()
     /// Table that renders dependency rows.
@@ -81,8 +89,11 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         markdownButton.action = #selector(exportMarkdownTapped)
         jsonButton.target = self
         jsonButton.action = #selector(exportJSONTapped)
+        graphButton.target = self
+        graphButton.action = #selector(exportGraphTapped)
         markdownButton.isEnabled = false
         jsonButton.isEnabled = false
+        graphButton.isEnabled = false
 
         progressIndicator.style = .spinning
         progressIndicator.controlSize = .small
@@ -106,28 +117,75 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         summaryLabel.font = .systemFont(ofSize: 12, weight: .medium)
         summaryLabel.textColor = .secondaryLabelColor
 
+        let contextLabel = NSTextField(labelWithString: "Context")
+        contextLabel.font = .boldSystemFont(ofSize: NSFont.smallSystemFontSize)
+        contextPopup.target = self
+        contextPopup.action = #selector(contextSelectionChanged)
+        contextPopup.isEnabled = false
+        contextPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let contextRow = NSStackView(views: [contextLabel, contextPopup])
+        contextRow.orientation = .horizontal
+        contextRow.alignment = .centerY
+        contextRow.spacing = 8
+        contextLabel.setContentHuggingPriority(.required, for: .horizontal)
+
         findingsTableView.translatesAutoresizingMaskIntoConstraints = false
         dependenciesTableView.translatesAutoresizingMaskIntoConstraints = false
         findingsTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         dependenciesTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        findingsTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
-        dependenciesTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        findingsTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+        dependenciesTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
 
         let findingsSection = sectionContainer(title: "Findings", tableView: findingsTableView)
         let dependenciesSection = sectionContainer(title: "Dependencies", tableView: dependenciesTableView)
         findingsSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         dependenciesSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let exportRow = NSStackView(views: [markdownButton, jsonButton])
+        let detailsStack = NSStackView(views: [summaryLabel, contextRow, findingsSection, dependenciesSection])
+        detailsStack.orientation = .vertical
+        detailsStack.alignment = .width
+        detailsStack.distribution = .fill
+        detailsStack.spacing = 10
+
+        graphTextView.isEditable = false
+        graphTextView.isSelectable = true
+        graphTextView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        graphTextView.string = ""
+        graphTextView.textContainerInset = NSSize(width: 8, height: 8)
+        let graphScrollView = NSScrollView()
+        graphScrollView.borderType = .bezelBorder
+        graphScrollView.hasVerticalScroller = true
+        graphScrollView.hasHorizontalScroller = true
+        graphScrollView.autohidesScrollers = false
+        graphScrollView.documentView = graphTextView
+        graphTextView.minSize = NSSize(width: 0, height: 0)
+        graphTextView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        graphTextView.isVerticallyResizable = true
+        graphTextView.isHorizontallyResizable = true
+        graphTextView.autoresizingMask = [.width, .height]
+        graphTextView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        graphTextView.textContainer?.widthTracksTextView = false
+
+        tabView.translatesAutoresizingMaskIntoConstraints = false
+        tabView.setContentHuggingPriority(.defaultLow, for: .vertical)
+        tabView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        let detailsItem = NSTabViewItem(identifier: "details")
+        detailsItem.label = "Details"
+        detailsItem.view = detailsStack
+        let graphItem = NSTabViewItem(identifier: "graph")
+        graphItem.label = "Graph"
+        graphItem.view = graphScrollView
+        tabView.addTabViewItem(detailsItem)
+        tabView.addTabViewItem(graphItem)
+
+        let exportRow = NSStackView(views: [markdownButton, jsonButton, graphButton])
         exportRow.orientation = .horizontal
         exportRow.alignment = .centerY
         exportRow.spacing = 8
 
         rootStack.addArrangedSubview(pathRow)
         rootStack.addArrangedSubview(errorLabel)
-        rootStack.addArrangedSubview(summaryLabel)
-        rootStack.addArrangedSubview(findingsSection)
-        rootStack.addArrangedSubview(dependenciesSection)
+        rootStack.addArrangedSubview(tabView)
         rootStack.addArrangedSubview(exportRow)
 
         contentView.addSubview(rootStack)
@@ -139,9 +197,8 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
             rootStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
             pathRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             errorLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            summaryLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            findingsSection.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            dependenciesSection.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            tabView.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            tabView.heightAnchor.constraint(greaterThanOrEqualToConstant: 440),
             exportRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
     }
@@ -150,14 +207,14 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private func bindViewModel() {
         pathField.stringValue = viewModel.projectPath
 
-        viewModel.$findings
+        viewModel.$findingRows
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.findingsTableView.update(findings: $0) }
+            .sink { [weak self] in self?.findingsTableView.update(findingRows: $0) }
             .store(in: &cancellables)
 
-        viewModel.$dependencies
+        viewModel.$dependencyRows
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.dependenciesTableView.update(dependencies: $0) }
+            .sink { [weak self] in self?.dependenciesTableView.update(dependencyRows: $0) }
             .store(in: &cancellables)
 
         viewModel.$errorMessage
@@ -172,6 +229,27 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] text in
                 self?.summaryLabel.stringValue = text
+            }
+            .store(in: &cancellables)
+
+        viewModel.$contextSummaries
+            .receive(on: RunLoop.main)
+            .sink { [weak self] summaries in
+                self?.reloadContextMenu(summaries: summaries)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$selectedContextDisplayPath
+            .receive(on: RunLoop.main)
+            .sink { [weak self] selected in
+                self?.selectContextMenuItem(displayPath: selected)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$graphPreviewText
+            .receive(on: RunLoop.main)
+            .sink { [weak self] text in
+                self?.graphTextView.string = text
             }
             .store(in: &cancellables)
 
@@ -195,6 +273,7 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
                 let enabled = report != nil
                 self?.markdownButton.isEnabled = enabled
                 self?.jsonButton.isEnabled = enabled
+                self?.graphButton.isEnabled = enabled
             }
             .store(in: &cancellables)
     }
@@ -214,6 +293,28 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         stack.distribution = .fill
         stack.spacing = 6
         return stack
+    }
+
+    /// Rebuilds the context picker from the latest workspace report.
+    private func reloadContextMenu(summaries: [WorkspaceContextSummary]) {
+        contextPopup.removeAllItems()
+        contextPopup.addItem(withTitle: "All contexts")
+        for summary in summaries {
+            contextPopup.addItem(withTitle: summary.menuTitle)
+            contextPopup.lastItem?.representedObject = summary.displayPath
+        }
+        contextPopup.isEnabled = !summaries.isEmpty
+    }
+
+    /// Keeps the picker aligned when the view model resets selection.
+    private func selectContextMenuItem(displayPath: String?) {
+        guard let displayPath else {
+            contextPopup.selectItem(at: 0)
+            return
+        }
+        if let item = contextPopup.itemArray.first(where: { $0.representedObject as? String == displayPath }) {
+            contextPopup.select(item)
+        }
     }
 
     @objc
@@ -242,6 +343,12 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     }
 
     @objc
+    /// Applies the selected context filter to the findings and dependency tables.
+    private func contextSelectionChanged() {
+        viewModel.selectContext(displayPath: contextPopup.selectedItem?.representedObject as? String)
+    }
+
+    @objc
     /// Opens a project from the application menu.
     func openProjectFromMenu(_ sender: Any?) {
         browseTapped()
@@ -265,6 +372,13 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private func exportJSONTapped() {
         guard let content = viewModel.exportJSON() else { return }
         save(content: content, suggestedName: "dependency-report.json")
+    }
+
+    @objc
+    /// Exports the latest workspace graph as Mermaid when one is available.
+    private func exportGraphTapped() {
+        guard let content = viewModel.exportGraphMermaid() else { return }
+        save(content: content, suggestedName: "workspace-graph.mmd")
     }
 
     /// Saves exported content to a user-selected destination and surfaces write errors inline.

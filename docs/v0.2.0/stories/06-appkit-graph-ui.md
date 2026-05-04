@@ -17,7 +17,7 @@ Teach the macOS app to present aggregate workspace state, per-context details, a
 
 - Service and view-model support for aggregate analysis results.
 - Workspace overview state, context selection, and selected-context findings/dependencies presentation.
-- Graph tab that renders Mermaid output via an app-only dependency.
+- Graph tab that previews Mermaid text without adding a graph-canvas dependency.
 - Export support for Markdown, JSON, and Mermaid text.
 - Tests for state transitions, selection behavior, stale task protection, and export results.
 

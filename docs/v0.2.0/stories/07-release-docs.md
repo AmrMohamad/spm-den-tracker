@@ -25,7 +25,7 @@ Align the public docs and maintainer-facing release surface with the workspace-a
 - README examples for repo-root inputs, mode overrides, graph command, and aggregate outputs.
 - Release docs updated to use `0.2.0` examples and `v0.2.0` tag examples.
 - A release note file for `0.2.0`.
-- A short note explaining provenance and why `Package.resolved` alone does not provide graph topology.
+- A short note explaining provenance and why `Package.resolved` proves resolved pins but not direct declaration provenance by itself.
 
 ## Rules
 

@@ -2,12 +2,12 @@ import AppKit
 import DependencyTrackerCore
 
 @MainActor
-/// Scrollable table view that renders findings from a `DependencyReport`.
+/// Scrollable table view that renders scoped findings from a workspace report.
 final class FindingsTableView: NSScrollView {
     /// Backing AppKit table responsible for row rendering and selection behavior.
     private let tableView = NSTableView()
     /// The current finding rows displayed by the table.
-    private var findings: [Finding] = []
+    private var findingRows: [ScopedFindingRow] = []
 
     /// Builds the scroll view and configures the embedded table.
     override init(frame frameRect: NSRect) {
@@ -33,8 +33,8 @@ final class FindingsTableView: NSScrollView {
     }
 
     /// Replaces the displayed finding rows and reloads the table.
-    func update(findings: [Finding]) {
-        self.findings = findings
+    func update(findingRows: [ScopedFindingRow]) {
+        self.findingRows = findingRows
         tableView.reloadData()
     }
 
@@ -42,6 +42,8 @@ final class FindingsTableView: NSScrollView {
     @discardableResult
     private func setupColumns() -> CGFloat {
         var totalWidth: CGFloat = 0
+        addColumn(identifier: "scope", title: "Scope", width: 180)
+        totalWidth += 180
         addColumn(identifier: "severity", title: "Severity", width: 80)
         totalWidth += 80
         addColumn(identifier: "category", title: "Category", width: 110)
@@ -65,16 +67,19 @@ final class FindingsTableView: NSScrollView {
 extension FindingsTableView: NSTableViewDataSource, NSTableViewDelegate {
     /// Returns the number of finding rows currently displayed.
     func numberOfRows(in tableView: NSTableView) -> Int {
-        findings.count
+        findingRows.count
     }
 
     /// Builds the label view for one finding cell based on the selected column.
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let finding = findings[row]
+        let findingRow = findingRows[row]
+        let finding = findingRow.finding
         let identifier = tableColumn?.identifier ?? NSUserInterfaceItemIdentifier("cell")
         let text: String
 
         switch identifier.rawValue {
+        case "scope":
+            text = findingRow.scope
         case "severity":
             text = finding.severity.rawValue.uppercased()
         case "category":

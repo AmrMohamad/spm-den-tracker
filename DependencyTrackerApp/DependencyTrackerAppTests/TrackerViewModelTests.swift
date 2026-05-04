@@ -27,7 +27,7 @@ final class TrackerViewModelTests: XCTestCase {
     }
 
     func testEmptyInputSetsValidationErrorWithoutCallingService() async throws {
-        let service = CountingService(mode: .success(sampleReport(projectPath: "/tmp/ignored.xcodeproj")))
+        let service = CountingService(mode: .success(sampleWorkspaceReport(rootPath: "/tmp/ignored")))
         let viewModel = TrackerViewModel(service: service)
 
         viewModel.projectPath = ""
@@ -40,27 +40,57 @@ final class TrackerViewModelTests: XCTestCase {
         XCTAssertEqual(callCount, 0)
     }
 
-    func testSuccessfulAnalysisPopulatesReportAndExports() async throws {
-        let report = sampleReport(projectPath: "/tmp/App.xcodeproj")
+    func testSuccessfulWorkspaceAnalysisFlattensRowsAndExports() async throws {
+        let report = sampleWorkspaceReport(rootPath: "/tmp/AppWorkspace")
         let service = CountingService(mode: .success(report))
         let viewModel = TrackerViewModel(service: service)
 
-        viewModel.projectPath = report.projectPath
+        viewModel.projectPath = report.rootPath
         viewModel.analyze()
 
         try await waitUntil { !viewModel.isAnalyzing }
 
-        XCTAssertEqual(viewModel.report?.projectPath, report.projectPath)
-        XCTAssertEqual(viewModel.findings, report.findings)
-        XCTAssertEqual(viewModel.dependencies, report.dependencies)
+        XCTAssertEqual(viewModel.report?.rootPath, report.rootPath)
+        XCTAssertEqual(viewModel.findingRows, TrackerViewModel.scopedFindings(from: report))
+        XCTAssertEqual(viewModel.dependencyRows, TrackerViewModel.scopedDependencies(from: report))
+        XCTAssertEqual(viewModel.dependencyRows.count, 2)
+        XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["App", "Tools"])
+        XCTAssertEqual(viewModel.findingRows.map(\.scope), [report.rootPath, "App", "Tools"])
+        XCTAssertEqual(viewModel.contextSummaries.map(\.displayPath), ["App", "Tools"])
+        XCTAssertNil(viewModel.selectedContextDisplayPath)
         XCTAssertNil(viewModel.errorMessage)
-        XCTAssertTrue(viewModel.exportMarkdown()?.contains("# SPM Dependency Report") == true)
+        XCTAssertTrue(viewModel.exportMarkdown()?.contains("# SPM Dependency Tracker Workspace Report") == true)
         let json = try XCTUnwrap(viewModel.exportJSON())
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        XCTAssertEqual(try decoder.decode(DependencyReport.self, from: Data(json.utf8)).projectPath, report.projectPath)
+        XCTAssertEqual(try decoder.decode(WorkspaceReport.self, from: Data(json.utf8)).rootPath, report.rootPath)
+        let graph = try XCTUnwrap(viewModel.exportGraphMermaid())
+        XCTAssertTrue(graph.contains("graph TD"))
+        XCTAssertTrue(graph.contains("AppWorkspace"))
+        XCTAssertEqual(viewModel.graphPreviewText, graph)
         let callCount = await service.callCount
         XCTAssertEqual(callCount, 1)
+    }
+
+    func testContextSelectionFiltersDisplayedRows() async throws {
+        let report = sampleWorkspaceReport(rootPath: "/tmp/AppWorkspace")
+        let service = CountingService(mode: .success(report))
+        let viewModel = TrackerViewModel(service: service)
+
+        viewModel.projectPath = report.rootPath
+        viewModel.analyze()
+
+        try await waitUntil { !viewModel.isAnalyzing }
+        viewModel.selectContext(displayPath: "Tools")
+
+        XCTAssertEqual(viewModel.selectedContextDisplayPath, "Tools")
+        XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["Tools"])
+        XCTAssertEqual(viewModel.findingRows.map(\.scope), ["Tools"])
+
+        viewModel.selectContext(displayPath: nil)
+
+        XCTAssertNil(viewModel.selectedContextDisplayPath)
+        XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["App", "Tools"])
     }
 
     func testFailedAnalysisClearsReportAndShowsError() async throws {
@@ -73,31 +103,33 @@ final class TrackerViewModelTests: XCTestCase {
         try await waitUntil { !viewModel.isAnalyzing }
 
         XCTAssertNil(viewModel.report)
-        XCTAssertTrue(viewModel.findings.isEmpty)
-        XCTAssertTrue(viewModel.dependencies.isEmpty)
+        XCTAssertTrue(viewModel.findingRows.isEmpty)
+        XCTAssertTrue(viewModel.dependencyRows.isEmpty)
+        XCTAssertTrue(viewModel.contextSummaries.isEmpty)
+        XCTAssertEqual(viewModel.graphPreviewText, "")
         XCTAssertEqual(viewModel.errorMessage, TestError.failed.localizedDescription)
     }
 
     func testLaterAnalysisSupersedesCanceledEarlierTask() async throws {
-        let firstReport = sampleReport(projectPath: "/tmp/First.xcodeproj")
-        let secondReport = sampleReport(projectPath: "/tmp/Second.xcodeproj")
+        let firstReport = sampleWorkspaceReport(rootPath: "/tmp/First")
+        let secondReport = sampleWorkspaceReport(rootPath: "/tmp/Second")
         let service = SequencedService(first: firstReport, second: secondReport)
         let viewModel = TrackerViewModel(service: service)
 
-        viewModel.projectPath = firstReport.projectPath
+        viewModel.projectPath = firstReport.rootPath
         viewModel.analyze()
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
-        viewModel.projectPath = secondReport.projectPath
+        viewModel.projectPath = secondReport.rootPath
         viewModel.analyze()
 
         try await waitUntil {
-            !viewModel.isAnalyzing && viewModel.report?.projectPath == secondReport.projectPath
+            !viewModel.isAnalyzing && viewModel.report?.rootPath == secondReport.rootPath
         }
 
-        XCTAssertEqual(viewModel.report?.projectPath, secondReport.projectPath)
-        XCTAssertEqual(viewModel.dependencies, secondReport.dependencies)
+        XCTAssertEqual(viewModel.report?.rootPath, secondReport.rootPath)
+        XCTAssertEqual(viewModel.dependencyRows, TrackerViewModel.scopedDependencies(from: secondReport))
         XCTAssertNil(viewModel.errorMessage)
     }
 
@@ -118,7 +150,7 @@ final class TrackerViewModelTests: XCTestCase {
 
 private actor CountingService: DependencyTrackingService {
     enum Mode {
-        case success(DependencyReport)
+        case success(WorkspaceReport)
         case failure(Error)
     }
 
@@ -129,7 +161,7 @@ private actor CountingService: DependencyTrackingService {
         self.mode = mode
     }
 
-    func analyze(projectPath: String) async throws -> DependencyReport {
+    func analyze(projectPath: String) async throws -> WorkspaceReport {
         callCount += 1
         switch mode {
         case .success(let report):
@@ -141,16 +173,16 @@ private actor CountingService: DependencyTrackingService {
 }
 
 private actor SequencedService: DependencyTrackingService {
-    private let first: DependencyReport
-    private let second: DependencyReport
+    private let first: WorkspaceReport
+    private let second: WorkspaceReport
     private var callIndex = 0
 
-    init(first: DependencyReport, second: DependencyReport) {
+    init(first: WorkspaceReport, second: WorkspaceReport) {
         self.first = first
         self.second = second
     }
 
-    func analyze(projectPath: String) async throws -> DependencyReport {
+    func analyze(projectPath: String) async throws -> WorkspaceReport {
         callIndex += 1
         if callIndex == 1 {
             try await Task.sleep(nanoseconds: 500_000_000)
@@ -168,11 +200,51 @@ private enum TestError: LocalizedError {
     }
 }
 
-private func sampleReport(projectPath: String) -> DependencyReport {
+private func sampleWorkspaceReport(rootPath: String) -> WorkspaceReport {
+    let appReport = sampleReport(projectPath: "\(rootPath)/App.xcodeproj", identity: "alamofire")
+    let toolsReport = sampleReport(projectPath: "\(rootPath)/Tools/Package.swift", identity: "swift-argument-parser")
+    let appContext = ResolutionContext(
+        key: appReport.resolvedFilePath,
+        displayPath: "App",
+        resolvedFilePath: appReport.resolvedFilePath,
+        manifestPaths: [appReport.projectPath]
+    )
+    let toolsContext = ResolutionContext(
+        key: toolsReport.resolvedFilePath,
+        displayPath: "Tools",
+        resolvedFilePath: toolsReport.resolvedFilePath,
+        manifestPaths: [toolsReport.projectPath]
+    )
+    let aggregateFinding = Finding(
+        severity: .warning,
+        category: .declaredConstraint,
+        message: "Workspace has dependency drift.",
+        recommendation: "Review the workspace contexts."
+    )
+
+    return WorkspaceReport(
+        rootPath: rootPath,
+        generatedAt: Date(timeIntervalSince1970: 0),
+        analysisMode: .auto,
+        discoveredManifests: [
+            DiscoveredManifest(path: appReport.projectPath, kind: .xcodeproj, resolvedFilePath: appReport.resolvedFilePath, ownershipKey: appReport.resolvedFilePath),
+            DiscoveredManifest(path: toolsReport.projectPath, kind: .packageManifest, resolvedFilePath: toolsReport.resolvedFilePath, ownershipKey: toolsReport.resolvedFilePath),
+        ],
+        contexts: [
+            ResolutionContextReport(context: appContext, reports: [appReport], findings: appReport.findings, partialFailures: []),
+            ResolutionContextReport(context: toolsContext, reports: [toolsReport], findings: toolsReport.findings, partialFailures: []),
+        ],
+        aggregateFindings: [aggregateFinding],
+        partialFailures: [],
+        graphSummary: WorkspaceGraphSummary(certainty: .metadataOnly, message: "Topology derived from discovered workspace contexts.")
+    )
+}
+
+private func sampleReport(projectPath: String, identity: String) -> DependencyReport {
     let pin = ResolvedPin(
-        identity: "alamofire",
+        identity: identity,
         kind: .remoteSourceControl,
-        location: "https://github.com/Alamofire/Alamofire.git",
+        location: "https://github.com/example/\(identity).git",
         state: .version("5.9.1", revision: "abc")
     )
     let outdated = OutdatedResult(pin: pin, latestVersion: "5.10.0", updateType: .minor, isOutdated: true)

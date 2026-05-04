@@ -29,17 +29,47 @@ enum ProjectSelectionValidator {
     }
 }
 
+/// Finding row plus the workspace scope that produced it.
+struct ScopedFindingRow: Equatable {
+    let scope: String
+    let finding: Finding
+}
+
+/// Dependency row plus the workspace scope that produced it.
+struct ScopedDependencyRow: Equatable {
+    let scope: String
+    let dependency: DependencyAnalysis
+}
+
+/// Compact context row used by the AppKit picker.
+struct WorkspaceContextSummary: Equatable {
+    let displayPath: String
+    let dependencyCount: Int
+    let findingCount: Int
+    let manifestCount: Int
+
+    var menuTitle: String {
+        "\(displayPath) (\(dependencyCount) deps, \(findingCount) findings)"
+    }
+}
+
 @MainActor
 /// Main-window view model that coordinates user input, analysis state, and export actions.
 final class TrackerViewModel: ObservableObject {
     /// The project path currently shown in the text field.
     @Published var projectPath: String = ""
     /// The most recent successful report, used to power exports and UI tables.
-    @Published private(set) var report: DependencyReport?
+    @Published private(set) var report: WorkspaceReport?
     /// The finding rows currently displayed in the UI.
-    @Published private(set) var findings: [Finding] = []
+    @Published private(set) var findingRows: [ScopedFindingRow] = []
     /// The dependency rows currently displayed in the UI.
-    @Published private(set) var dependencies: [DependencyAnalysis] = []
+    @Published private(set) var dependencyRows: [ScopedDependencyRow] = []
+    /// Contexts available for focused table presentation.
+    @Published private(set) var contextSummaries: [WorkspaceContextSummary] = []
+    /// The currently selected context display path, or `nil` for all contexts.
+    @Published private(set) var selectedContextDisplayPath: String?
+    /// The current Mermaid graph preview text.
+    @Published private(set) var graphPreviewText = ""
     /// Indicates whether an analysis is actively running.
     @Published private(set) var isAnalyzing = false
     /// The latest user-visible error, if the last run failed validation or execution.
@@ -53,6 +83,8 @@ final class TrackerViewModel: ObservableObject {
     private let markdownFormatter = MarkdownReporter()
     /// Formatter reused for JSON export.
     private let jsonFormatter = JSONReporter()
+    /// Formatter reused for graph export.
+    private let graphRenderer = WorkspaceGraphRenderer()
     /// The currently running analysis task so it can be cancelled before a new run starts.
     private var analysisTask: Task<Void, Never>?
     /// Identifies the latest requested analysis so stale task completions cannot overwrite newer UI state.
@@ -84,8 +116,11 @@ final class TrackerViewModel: ObservableObject {
             isAnalyzing = false
             errorMessage = "Select an Xcode project, project directory, or Package.resolved file."
             report = nil
-            findings = []
-            dependencies = []
+            findingRows = []
+            dependencyRows = []
+            contextSummaries = []
+            selectedContextDisplayPath = nil
+            graphPreviewText = ""
             summaryText = "No report loaded."
             return
         }
@@ -101,8 +136,11 @@ final class TrackerViewModel: ObservableObject {
                 guard let self, self.activeAnalysisID == analysisID else { return }
                 self.activeAnalysisID = nil
                 self.report = report
-                self.findings = report.findings
-                self.dependencies = report.dependencies
+                self.contextSummaries = Self.makeContextSummaries(from: report)
+                self.selectedContextDisplayPath = nil
+                self.findingRows = Self.scopedFindings(from: report, selectedContext: nil)
+                self.dependencyRows = Self.scopedDependencies(from: report, selectedContext: nil)
+                self.graphPreviewText = self.graphRenderer.render(report, format: .mermaid)
                 self.summaryText = Self.makeSummaryText(report: report)
                 self.errorMessage = nil
                 self.isAnalyzing = false
@@ -114,8 +152,11 @@ final class TrackerViewModel: ObservableObject {
                 guard let self, self.activeAnalysisID == analysisID else { return }
                 self.activeAnalysisID = nil
                 self.report = nil
-                self.findings = []
-                self.dependencies = []
+                self.findingRows = []
+                self.dependencyRows = []
+                self.contextSummaries = []
+                self.selectedContextDisplayPath = nil
+                self.graphPreviewText = ""
                 self.summaryText = "No report loaded."
                 self.errorMessage = error.localizedDescription
                 self.isAnalyzing = false
@@ -140,11 +181,83 @@ final class TrackerViewModel: ObservableObject {
         return jsonFormatter.format(report)
     }
 
+    /// Returns the current workspace graph as Mermaid text, or `nil` when no report is loaded.
+    func exportGraphMermaid() -> String? {
+        guard let report else { return nil }
+        return graphRenderer.render(report, format: .mermaid)
+    }
+
+    /// Focuses the displayed rows on one context, or restores the full workspace view.
+    func selectContext(displayPath: String?) {
+        selectedContextDisplayPath = displayPath
+        guard let report else {
+            findingRows = []
+            dependencyRows = []
+            return
+        }
+        findingRows = Self.scopedFindings(from: report, selectedContext: displayPath)
+        dependencyRows = Self.scopedDependencies(from: report, selectedContext: displayPath)
+    }
+
     /// Builds the summary string shown above the split tables.
-    static func makeSummaryText(report: DependencyReport) -> String {
-        let dependencyCount = report.dependencies.count
-        let outdatedCount = report.dependencies.filter { $0.outdated?.isOutdated == true }.count
-        let actionableCount = report.findings.filter(\.isActionable).count
-        return "\(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable"
+    static func makeSummaryText(report: WorkspaceReport) -> String {
+        let dependencies = scopedDependencies(from: report).map(\.dependency)
+        let findings = scopedFindings(from: report).map(\.finding)
+        let dependencyCount = dependencies.count
+        let outdatedCount = dependencies.filter { $0.outdated?.isOutdated == true }.count
+        let actionableCount = findings.filter(\.isActionable).count
+        let partialFailureCount = report.partialFailures.count + report.contexts.flatMap(\.partialFailures).count
+        return "\(report.contexts.count) contexts · \(report.discoveredManifests.count) manifests · \(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable · \(partialFailureCount) partial failures"
+    }
+
+    /// Builds compact context labels for AppKit selection.
+    static func makeContextSummaries(from report: WorkspaceReport) -> [WorkspaceContextSummary] {
+        report.contexts.map { context in
+            WorkspaceContextSummary(
+                displayPath: context.context.displayPath,
+                dependencyCount: context.reports.flatMap(\.dependencies).count,
+                findingCount: context.findings.count,
+                manifestCount: context.context.manifestPaths.count
+            )
+        }
+    }
+
+    /// Flattens workspace and context findings while preserving their source scope.
+    static func scopedFindings(from report: WorkspaceReport, selectedContext: String? = nil) -> [ScopedFindingRow] {
+        let selectedContexts = contexts(from: report, selectedContext: selectedContext)
+        guard selectedContext == nil else {
+            return selectedContexts.flatMap { context in
+                context.findings.map { finding in
+                    ScopedFindingRow(scope: context.context.displayPath, finding: finding)
+                }
+            }
+        }
+
+        let aggregate = report.aggregateFindings.map { finding in
+            ScopedFindingRow(scope: report.rootPath, finding: finding)
+        }
+        let contextual = selectedContexts.flatMap { context in
+            context.findings.map { finding in
+                ScopedFindingRow(scope: context.context.displayPath, finding: finding)
+            }
+        }
+        return aggregate + contextual
+    }
+
+    /// Flattens all dependency rows from all context reports while preserving their source scope.
+    static func scopedDependencies(from report: WorkspaceReport, selectedContext: String? = nil) -> [ScopedDependencyRow] {
+        contexts(from: report, selectedContext: selectedContext).flatMap { context in
+            context.reports.flatMap { dependencyReport in
+                dependencyReport.dependencies.map { dependency in
+                    ScopedDependencyRow(scope: context.context.displayPath, dependency: dependency)
+                }
+            }
+        }
+    }
+
+    /// Returns all contexts or the selected context when one is active.
+    private static func contexts(from report: WorkspaceReport, selectedContext: String?) -> [ResolutionContextReport] {
+        guard let selectedContext else { return report.contexts }
+        return report.contexts.filter { $0.context.displayPath == selectedContext }
     }
 }
