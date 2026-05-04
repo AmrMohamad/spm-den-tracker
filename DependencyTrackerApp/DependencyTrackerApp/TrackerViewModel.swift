@@ -35,7 +35,7 @@ final class TrackerViewModel: ObservableObject {
     /// The project path currently shown in the text field.
     @Published var projectPath: String = ""
     /// The most recent successful report, used to power exports and UI tables.
-    @Published private(set) var report: DependencyReport?
+    @Published private(set) var report: WorkspaceReport?
     /// The finding rows currently displayed in the UI.
     @Published private(set) var findings: [Finding] = []
     /// The dependency rows currently displayed in the UI.
@@ -53,6 +53,8 @@ final class TrackerViewModel: ObservableObject {
     private let markdownFormatter = MarkdownReporter()
     /// Formatter reused for JSON export.
     private let jsonFormatter = JSONReporter()
+    /// Formatter reused for graph export.
+    private let graphRenderer = WorkspaceGraphRenderer()
     /// The currently running analysis task so it can be cancelled before a new run starts.
     private var analysisTask: Task<Void, Never>?
     /// Identifies the latest requested analysis so stale task completions cannot overwrite newer UI state.
@@ -101,8 +103,8 @@ final class TrackerViewModel: ObservableObject {
                 guard let self, self.activeAnalysisID == analysisID else { return }
                 self.activeAnalysisID = nil
                 self.report = report
-                self.findings = report.findings
-                self.dependencies = report.dependencies
+                self.findings = Self.flattenFindings(from: report)
+                self.dependencies = Self.flattenDependencies(from: report)
                 self.summaryText = Self.makeSummaryText(report: report)
                 self.errorMessage = nil
                 self.isAnalyzing = false
@@ -140,11 +142,30 @@ final class TrackerViewModel: ObservableObject {
         return jsonFormatter.format(report)
     }
 
+    /// Returns the current workspace graph as Mermaid text, or `nil` when no report is loaded.
+    func exportGraphMermaid() -> String? {
+        guard let report else { return nil }
+        return graphRenderer.render(report, format: .mermaid)
+    }
+
     /// Builds the summary string shown above the split tables.
-    static func makeSummaryText(report: DependencyReport) -> String {
-        let dependencyCount = report.dependencies.count
-        let outdatedCount = report.dependencies.filter { $0.outdated?.isOutdated == true }.count
-        let actionableCount = report.findings.filter(\.isActionable).count
-        return "\(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable"
+    static func makeSummaryText(report: WorkspaceReport) -> String {
+        let dependencyCount = flattenDependencies(from: report).count
+        let outdatedCount = flattenDependencies(from: report).filter { $0.outdated?.isOutdated == true }.count
+        let actionableCount = flattenFindings(from: report).filter(\.isActionable).count
+        let partialFailureCount = report.partialFailures.count + report.contexts.flatMap(\.partialFailures).count
+        return "\(report.contexts.count) contexts · \(report.discoveredManifests.count) manifests · \(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable · \(partialFailureCount) partial failures"
+    }
+
+    /// Flattens workspace and context findings into the table model.
+    static func flattenFindings(from report: WorkspaceReport) -> [Finding] {
+        report.aggregateFindings + report.contexts.flatMap(\.findings)
+    }
+
+    /// Flattens all dependency rows from all context reports into the table model.
+    static func flattenDependencies(from report: WorkspaceReport) -> [DependencyAnalysis] {
+        report.contexts.flatMap { context in
+            context.reports.flatMap(\.dependencies)
+        }
     }
 }
