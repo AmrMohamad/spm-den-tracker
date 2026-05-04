@@ -133,8 +133,8 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         dependenciesTableView.translatesAutoresizingMaskIntoConstraints = false
         findingsTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         dependenciesTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        findingsTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
-        dependenciesTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        findingsTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+        dependenciesTableView.heightAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
 
         let findingsSection = sectionContainer(title: "Findings", tableView: findingsTableView)
         let dependenciesSection = sectionContainer(title: "Dependencies", tableView: dependenciesTableView)
@@ -198,7 +198,7 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
             pathRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             errorLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             tabView.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            tabView.heightAnchor.constraint(greaterThanOrEqualToConstant: 520),
+            tabView.heightAnchor.constraint(greaterThanOrEqualToConstant: 440),
             exportRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
     }
