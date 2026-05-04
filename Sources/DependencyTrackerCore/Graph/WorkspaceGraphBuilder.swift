@@ -160,13 +160,10 @@ public struct WorkspaceGraphBuilder: Sendable {
 
     /// Converts arbitrary strings into graph-safe identifiers.
     private func identifier(_ value: String) -> String {
-        let raw = value.unicodeScalars.reduce(into: "") { result, scalar in
-            result.append(CharacterSet.alphanumerics.contains(scalar) ? String(scalar) : "_")
-        }
-        guard !raw.isEmpty else {
-            return "node"
-        }
-        return raw.first?.isLetter == true ? raw : "n_\(raw)"
+        let encoded = value.unicodeScalars
+            .map { String($0.value, radix: 16, uppercase: true) }
+            .joined(separator: "_")
+        return encoded.isEmpty ? "node" : "n_\(encoded)"
     }
 
     /// Human-readable analysis mode label used in graph edges.

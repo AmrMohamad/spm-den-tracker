@@ -67,6 +67,26 @@ struct WorkspaceGraphRendererTests {
     }
 
     @Test
+    func graphBuilderKeepsCollidingNormalizedIdentitiesDistinct() {
+        let report = sampleWorkspaceReport(
+            dependencies: [
+                sampleDependency(identity: "foo-bar"),
+                sampleDependency(identity: "foo_bar"),
+            ],
+            graphSummary: WorkspaceGraphSummary(
+                certainty: .partiallyEnriched,
+                message: "2 resolved dependency edges were added; 0 have direct declaration provenance."
+            )
+        )
+        let document = WorkspaceGraphBuilder().makeDocument(from: report)
+        let dependencyNodes = document.nodes.filter { $0.kind == "dependency" }
+
+        #expect(dependencyNodes.count == 2)
+        #expect(Set(dependencyNodes.map(\.id)).count == 2)
+        #expect(Set(dependencyNodes.compactMap { $0.metadata["identity"] }) == ["foo-bar", "foo_bar"])
+    }
+
+    @Test
     func graphAnalyzersReportBlastRadiusAndTransitivePins() {
         let document = WorkspaceGraphBuilder().makeDocument(
             from: sampleMultiContextReport(
