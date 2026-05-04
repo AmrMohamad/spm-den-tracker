@@ -20,6 +20,8 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private let markdownButton = NSButton(title: "Export Markdown", target: nil, action: nil)
     /// Button that exports the latest report as JSON.
     private let jsonButton = NSButton(title: "Export JSON", target: nil, action: nil)
+    /// Button that exports the latest workspace graph as Mermaid.
+    private let graphButton = NSButton(title: "Export Graph", target: nil, action: nil)
     /// Spinner shown while the audit is running.
     private let progressIndicator = NSProgressIndicator()
     /// Inline error label used for validation and runtime failures.
@@ -81,8 +83,11 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         markdownButton.action = #selector(exportMarkdownTapped)
         jsonButton.target = self
         jsonButton.action = #selector(exportJSONTapped)
+        graphButton.target = self
+        graphButton.action = #selector(exportGraphTapped)
         markdownButton.isEnabled = false
         jsonButton.isEnabled = false
+        graphButton.isEnabled = false
 
         progressIndicator.style = .spinning
         progressIndicator.controlSize = .small
@@ -118,7 +123,7 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         findingsSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         dependenciesSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let exportRow = NSStackView(views: [markdownButton, jsonButton])
+        let exportRow = NSStackView(views: [markdownButton, jsonButton, graphButton])
         exportRow.orientation = .horizontal
         exportRow.alignment = .centerY
         exportRow.spacing = 8
@@ -150,14 +155,14 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private func bindViewModel() {
         pathField.stringValue = viewModel.projectPath
 
-        viewModel.$findings
+        viewModel.$findingRows
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.findingsTableView.update(findings: $0) }
+            .sink { [weak self] in self?.findingsTableView.update(findingRows: $0) }
             .store(in: &cancellables)
 
-        viewModel.$dependencies
+        viewModel.$dependencyRows
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.dependenciesTableView.update(dependencies: $0) }
+            .sink { [weak self] in self?.dependenciesTableView.update(dependencyRows: $0) }
             .store(in: &cancellables)
 
         viewModel.$errorMessage
@@ -195,6 +200,7 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
                 let enabled = report != nil
                 self?.markdownButton.isEnabled = enabled
                 self?.jsonButton.isEnabled = enabled
+                self?.graphButton.isEnabled = enabled
             }
             .store(in: &cancellables)
     }
@@ -265,6 +271,13 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private func exportJSONTapped() {
         guard let content = viewModel.exportJSON() else { return }
         save(content: content, suggestedName: "dependency-report.json")
+    }
+
+    @objc
+    /// Exports the latest workspace graph as Mermaid when one is available.
+    private func exportGraphTapped() {
+        guard let content = viewModel.exportGraphMermaid() else { return }
+        save(content: content, suggestedName: "workspace-graph.mmd")
     }
 
     /// Saves exported content to a user-selected destination and surfaces write errors inline.

@@ -69,7 +69,7 @@ struct Graph: AsyncParsableCommand {
         let context = context ?? CLIContext(analysisMode: analysisMode)
         let resolvedPath = try CLIInput.resolvedProjectPath(projectPath, writeError: writeError)
         let report = try await context.workspaceEngine.analyze(rootPath: resolvedPath)
-        let rendered = WorkspaceGraphRenderer().render(report, format: format)
+        let rendered = WorkspaceGraphRenderer().render(report, format: format.coreValue)
 
         if let output {
             try writeFile(rendered, URL(fileURLWithPath: output))
@@ -78,5 +78,19 @@ struct Graph: AsyncParsableCommand {
         }
 
         return ExitCode(report.hasActionableFindings ? 1 : 0)
+    }
+}
+
+extension GraphFormat {
+    /// Maps the CLI format enum into the core graph format enum.
+    var coreValue: WorkspaceGraphFormat {
+        switch self {
+        case .mermaid:
+            return .mermaid
+        case .dot:
+            return .dot
+        case .json:
+            return .json
+        }
     }
 }
