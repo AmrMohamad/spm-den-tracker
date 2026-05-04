@@ -155,14 +155,14 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private func bindViewModel() {
         pathField.stringValue = viewModel.projectPath
 
-        viewModel.$findings
+        viewModel.$findingRows
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.findingsTableView.update(findings: $0) }
+            .sink { [weak self] in self?.findingsTableView.update(findingRows: $0) }
             .store(in: &cancellables)
 
-        viewModel.$dependencies
+        viewModel.$dependencyRows
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.dependenciesTableView.update(dependencies: $0) }
+            .sink { [weak self] in self?.dependenciesTableView.update(dependencyRows: $0) }
             .store(in: &cancellables)
 
         viewModel.$errorMessage

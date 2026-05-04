@@ -51,9 +51,11 @@ final class TrackerViewModelTests: XCTestCase {
         try await waitUntil { !viewModel.isAnalyzing }
 
         XCTAssertEqual(viewModel.report?.rootPath, report.rootPath)
-        XCTAssertEqual(viewModel.findings, TrackerViewModel.flattenFindings(from: report))
-        XCTAssertEqual(viewModel.dependencies, TrackerViewModel.flattenDependencies(from: report))
-        XCTAssertEqual(viewModel.dependencies.count, 2)
+        XCTAssertEqual(viewModel.findingRows, TrackerViewModel.scopedFindings(from: report))
+        XCTAssertEqual(viewModel.dependencyRows, TrackerViewModel.scopedDependencies(from: report))
+        XCTAssertEqual(viewModel.dependencyRows.count, 2)
+        XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["App", "Tools"])
+        XCTAssertEqual(viewModel.findingRows.map(\.scope), [report.rootPath, "App", "Tools"])
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertTrue(viewModel.exportMarkdown()?.contains("# SPM Dependency Tracker Workspace Report") == true)
         let json = try XCTUnwrap(viewModel.exportJSON())
@@ -77,8 +79,8 @@ final class TrackerViewModelTests: XCTestCase {
         try await waitUntil { !viewModel.isAnalyzing }
 
         XCTAssertNil(viewModel.report)
-        XCTAssertTrue(viewModel.findings.isEmpty)
-        XCTAssertTrue(viewModel.dependencies.isEmpty)
+        XCTAssertTrue(viewModel.findingRows.isEmpty)
+        XCTAssertTrue(viewModel.dependencyRows.isEmpty)
         XCTAssertEqual(viewModel.errorMessage, TestError.failed.localizedDescription)
     }
 
@@ -101,7 +103,7 @@ final class TrackerViewModelTests: XCTestCase {
         }
 
         XCTAssertEqual(viewModel.report?.rootPath, secondReport.rootPath)
-        XCTAssertEqual(viewModel.dependencies, TrackerViewModel.flattenDependencies(from: secondReport))
+        XCTAssertEqual(viewModel.dependencyRows, TrackerViewModel.scopedDependencies(from: secondReport))
         XCTAssertNil(viewModel.errorMessage)
     }
 

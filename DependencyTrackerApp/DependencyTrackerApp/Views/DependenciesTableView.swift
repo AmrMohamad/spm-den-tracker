@@ -2,12 +2,12 @@ import AppKit
 import DependencyTrackerCore
 
 @MainActor
-/// Scrollable table view that renders dependency rows from a `DependencyReport`.
+/// Scrollable table view that renders scoped dependency rows from a workspace report.
 final class DependenciesTableView: NSScrollView {
     /// Backing AppKit table responsible for row rendering and selection behavior.
     private let tableView = NSTableView()
     /// The current dependency rows displayed by the table.
-    private var dependencies: [DependencyAnalysis] = []
+    private var dependencyRows: [ScopedDependencyRow] = []
 
     /// Builds the scroll view and configures the embedded table.
     override init(frame frameRect: NSRect) {
@@ -33,8 +33,8 @@ final class DependenciesTableView: NSScrollView {
     }
 
     /// Replaces the displayed dependency rows and reloads the table.
-    func update(dependencies: [DependencyAnalysis]) {
-        self.dependencies = dependencies
+    func update(dependencyRows: [ScopedDependencyRow]) {
+        self.dependencyRows = dependencyRows
         tableView.reloadData()
     }
 
@@ -42,6 +42,8 @@ final class DependenciesTableView: NSScrollView {
     @discardableResult
     private func setupColumns() -> CGFloat {
         var totalWidth: CGFloat = 0
+        addColumn(identifier: "scope", title: "Scope", width: 180)
+        totalWidth += 180
         addColumn(identifier: "package", title: "Package", width: 220)
         totalWidth += 220
         addColumn(identifier: "current", title: "Current", width: 120)
@@ -71,16 +73,19 @@ final class DependenciesTableView: NSScrollView {
 extension DependenciesTableView: NSTableViewDataSource, NSTableViewDelegate {
     /// Returns the number of dependency rows currently displayed.
     func numberOfRows(in tableView: NSTableView) -> Int {
-        dependencies.count
+        dependencyRows.count
     }
 
     /// Builds the label view for one dependency cell based on the selected column.
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let dependency = dependencies[row]
+        let dependencyRow = dependencyRows[row]
+        let dependency = dependencyRow.dependency
         let identifier = tableColumn?.identifier ?? NSUserInterfaceItemIdentifier("cell")
         let text: String
 
         switch identifier.rawValue {
+        case "scope":
+            text = dependencyRow.scope
         case "current":
             text = dependency.pin.state.displayValue
         case "declared":
@@ -108,7 +113,7 @@ extension DependenciesTableView: NSTableViewDataSource, NSTableViewDelegate {
     /// Applies a light risk tint to rows so risky updates are easier to scan.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let rowView = NSTableRowView()
-        rowView.backgroundColor = backgroundColor(for: dependencies[row])
+        rowView.backgroundColor = backgroundColor(for: dependencyRows[row].dependency)
         return rowView
     }
 
