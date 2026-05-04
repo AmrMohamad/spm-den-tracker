@@ -74,6 +74,7 @@ private struct DumpPackageRequirementLoader: Sendable {
                 return sourceControl.requirement.makeDeclaredRequirement(
                     identity: identity,
                     source: .packageManifest,
+                    sourcePath: manifestURL.path,
                     location: sourceControl.location.urlString
                 )
             }
@@ -83,6 +84,7 @@ private struct DumpPackageRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: DependencyIdentityNormalizer.normalizeIdentity(from: path),
                     source: .packageManifest,
+                    sourcePath: manifestURL.path,
                     kind: .local,
                     reference: path,
                     location: path,
@@ -115,6 +117,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: identity,
                     source: .xcodeProject,
+                    sourcePath: projectURL.path,
                     kind: .exact,
                     lowerBound: version,
                     upperBound: version,
@@ -125,6 +128,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: identity,
                     source: .xcodeProject,
+                    sourcePath: projectURL.path,
                     kind: .upToNextMajor,
                     lowerBound: version,
                     location: location,
@@ -134,6 +138,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: identity,
                     source: .xcodeProject,
+                    sourcePath: projectURL.path,
                     kind: .upToNextMinor,
                     lowerBound: version,
                     location: location,
@@ -143,6 +148,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: identity,
                     source: .xcodeProject,
+                    sourcePath: projectURL.path,
                     kind: .range,
                     lowerBound: lower,
                     upperBound: upper,
@@ -153,6 +159,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: identity,
                     source: .xcodeProject,
+                    sourcePath: projectURL.path,
                     kind: .branch,
                     reference: branch,
                     location: location,
@@ -162,6 +169,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
                 return DeclaredRequirement(
                     identity: identity,
                     source: .xcodeProject,
+                    sourcePath: projectURL.path,
                     kind: .revision,
                     reference: revision,
                     location: location,
@@ -175,6 +183,7 @@ private struct XcodeProjectRequirementLoader: Sendable {
             return DeclaredRequirement(
                 identity: DependencyIdentityNormalizer.normalizeIdentity(from: path),
                 source: .xcodeProject,
+                sourcePath: projectURL.path,
                 kind: .local,
                 reference: path,
                 location: path,
@@ -309,7 +318,12 @@ private struct DumpRequirement: Decodable {
     }
 
     /// Converts the dump-package requirement into the shared report model.
-    func makeDeclaredRequirement(identity: String, source: DeclaredRequirementSource, location: String?) -> DeclaredRequirement {
+    func makeDeclaredRequirement(
+        identity: String,
+        source: DeclaredRequirementSource,
+        sourcePath: String?,
+        location: String?
+    ) -> DeclaredRequirement {
         let description: String
         switch kind {
         case .exact:
@@ -331,6 +345,7 @@ private struct DumpRequirement: Decodable {
         return DeclaredRequirement(
             identity: identity,
             source: source,
+            sourcePath: sourcePath,
             kind: kind,
             lowerBound: lowerBound,
             upperBound: upperBound,

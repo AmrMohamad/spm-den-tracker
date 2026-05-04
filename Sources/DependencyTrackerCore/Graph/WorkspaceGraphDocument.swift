@@ -37,12 +37,14 @@ public struct WorkspaceGraphDocument: Codable, Sendable, Equatable, Hashable {
         public let id: String
         public let label: String
         public let kind: String
+        public let metadata: [String: String]
 
         /// Creates a graph node.
-        public init(id: String, label: String, kind: String) {
+        public init(id: String, label: String, kind: String, metadata: [String: String] = [:]) {
             self.id = id
             self.label = label
             self.kind = kind
+            self.metadata = metadata
         }
     }
 
@@ -51,12 +53,37 @@ public struct WorkspaceGraphDocument: Codable, Sendable, Equatable, Hashable {
         public let from: String
         public let to: String
         public let label: String
+        public let provenance: EdgeProvenance
 
         /// Creates a graph edge.
-        public init(from: String, to: String, label: String) {
+        public init(from: String, to: String, label: String, provenance: EdgeProvenance) {
             self.from = from
             self.to = to
             self.label = label
+            self.provenance = provenance
         }
     }
+
+    /// Explains why a graph edge exists.
+    public struct EdgeProvenance: Codable, Sendable, Equatable, Hashable {
+        public let source: EdgeProvenanceSource
+        public let sourcePath: String?
+        public let detail: String
+
+        /// Creates edge provenance for serialized and rendered graph outputs.
+        public init(source: EdgeProvenanceSource, sourcePath: String?, detail: String) {
+            self.source = source
+            self.sourcePath = sourcePath
+            self.detail = detail
+        }
+    }
+}
+
+/// Names the source that proved a workspace graph edge.
+public enum EdgeProvenanceSource: String, Codable, Sendable, Equatable, Hashable {
+    case workspaceDiscovery
+    case manifestDiscovery
+    case packageResolved
+    case packageManifest
+    case xcodeProject
 }

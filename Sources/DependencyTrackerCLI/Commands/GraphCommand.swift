@@ -9,8 +9,8 @@ struct Graph: AsyncParsableCommand {
         commandName: "graph",
         abstract: "Render a workspace graph derived from dependency audit metadata.",
         discussion: """
-        `graph` uses the workspace analysis surface to show discovered manifests and their aggregate ownership structure.
-        It is designed to stay useful even before the richer dependency-edge graph arrives from core graph helpers.
+        `graph` uses the workspace analysis surface to show discovered manifests, resolution contexts,
+        resolved dependency pins, and edge provenance when graph enrichment is enabled.
 
         Accepted input forms:
         - `/path/to/MyApp.xcodeproj`

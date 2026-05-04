@@ -56,6 +56,8 @@ final class TrackerViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.dependencyRows.count, 2)
         XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["App", "Tools"])
         XCTAssertEqual(viewModel.findingRows.map(\.scope), [report.rootPath, "App", "Tools"])
+        XCTAssertEqual(viewModel.contextSummaries.map(\.displayPath), ["App", "Tools"])
+        XCTAssertNil(viewModel.selectedContextDisplayPath)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertTrue(viewModel.exportMarkdown()?.contains("# SPM Dependency Tracker Workspace Report") == true)
         let json = try XCTUnwrap(viewModel.exportJSON())
@@ -65,8 +67,30 @@ final class TrackerViewModelTests: XCTestCase {
         let graph = try XCTUnwrap(viewModel.exportGraphMermaid())
         XCTAssertTrue(graph.contains("graph TD"))
         XCTAssertTrue(graph.contains("AppWorkspace"))
+        XCTAssertEqual(viewModel.graphPreviewText, graph)
         let callCount = await service.callCount
         XCTAssertEqual(callCount, 1)
+    }
+
+    func testContextSelectionFiltersDisplayedRows() async throws {
+        let report = sampleWorkspaceReport(rootPath: "/tmp/AppWorkspace")
+        let service = CountingService(mode: .success(report))
+        let viewModel = TrackerViewModel(service: service)
+
+        viewModel.projectPath = report.rootPath
+        viewModel.analyze()
+
+        try await waitUntil { !viewModel.isAnalyzing }
+        viewModel.selectContext(displayPath: "Tools")
+
+        XCTAssertEqual(viewModel.selectedContextDisplayPath, "Tools")
+        XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["Tools"])
+        XCTAssertEqual(viewModel.findingRows.map(\.scope), ["Tools"])
+
+        viewModel.selectContext(displayPath: nil)
+
+        XCTAssertNil(viewModel.selectedContextDisplayPath)
+        XCTAssertEqual(viewModel.dependencyRows.map(\.scope), ["App", "Tools"])
     }
 
     func testFailedAnalysisClearsReportAndShowsError() async throws {
@@ -81,6 +105,8 @@ final class TrackerViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.report)
         XCTAssertTrue(viewModel.findingRows.isEmpty)
         XCTAssertTrue(viewModel.dependencyRows.isEmpty)
+        XCTAssertTrue(viewModel.contextSummaries.isEmpty)
+        XCTAssertEqual(viewModel.graphPreviewText, "")
         XCTAssertEqual(viewModel.errorMessage, TestError.failed.localizedDescription)
     }
 

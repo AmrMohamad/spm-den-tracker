@@ -96,6 +96,8 @@ public struct DeclaredRequirement: Codable, Hashable, Sendable {
     public let identity: String
     /// The source that declared the requirement.
     public let source: DeclaredRequirementSource
+    /// The manifest or project path that contained the declaration when known.
+    public let sourcePath: String?
     /// The kind of requirement that was declared.
     public let kind: DeclaredRequirementKind
     /// The inclusive lower bound for version-based requirements when available.
@@ -113,6 +115,7 @@ public struct DeclaredRequirement: Codable, Hashable, Sendable {
     public init(
         identity: String,
         source: DeclaredRequirementSource,
+        sourcePath: String? = nil,
         kind: DeclaredRequirementKind,
         lowerBound: String? = nil,
         upperBound: String? = nil,
@@ -122,12 +125,39 @@ public struct DeclaredRequirement: Codable, Hashable, Sendable {
     ) {
         self.identity = identity
         self.source = source
+        self.sourcePath = sourcePath
         self.kind = kind
         self.lowerBound = lowerBound
         self.upperBound = upperBound
         self.reference = reference
         self.location = location
         self.description = description
+    }
+
+    /// Decodes older reports that predate declaration source paths.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        identity = try container.decode(String.self, forKey: .identity)
+        source = try container.decode(DeclaredRequirementSource.self, forKey: .source)
+        sourcePath = try container.decodeIfPresent(String.self, forKey: .sourcePath)
+        kind = try container.decode(DeclaredRequirementKind.self, forKey: .kind)
+        lowerBound = try container.decodeIfPresent(String.self, forKey: .lowerBound)
+        upperBound = try container.decodeIfPresent(String.self, forKey: .upperBound)
+        reference = try container.decodeIfPresent(String.self, forKey: .reference)
+        location = try container.decodeIfPresent(String.self, forKey: .location)
+        description = try container.decode(String.self, forKey: .description)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case identity
+        case source
+        case sourcePath
+        case kind
+        case lowerBound
+        case upperBound
+        case reference
+        case location
+        case description
     }
 }
 
@@ -251,6 +281,7 @@ public enum FindingCategory: String, Codable, Hashable, Sendable {
     case pinStrategy
     case outdated
     case declaredConstraint
+    case graph
 }
 
 /// Represents one actionable or informational audit finding.

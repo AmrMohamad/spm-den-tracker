@@ -29,7 +29,7 @@ For a given Xcode project, repository root, or `Package.resolved`, the engine as
 - constraint drift analysis between declared rules, resolved versions, and the latest allowed version
 - outdated checks against the latest stable upstream semantic version tags
 - workspace discovery, resolution-context grouping, and partial-failure visibility for repository-root analysis
-- graph output with bounded certainty labels so the tool can distinguish metadata-only, partially enriched, and complete graph data
+- graph output with dependency-edge provenance and bounded certainty labels so the tool can distinguish metadata-only, partially enriched, and complete graph data
 
 The result is shared across every output surface in the repo: terminal table, Markdown, JSON, Xcode-style diagnostics, JUnit XML, graph output, and the macOS UI.
 
@@ -68,14 +68,15 @@ Workspace reports add:
 - per-context reports for each resolution context
 - workspace-level aggregate findings
 - partial failures that did not block the entire run
+- graph summaries that describe whether dependency edges were enriched from resolved files and direct declarations
 
 Graph output is labeled by certainty:
 
-- `metadataOnly`: the graph only knows node metadata from `Package.resolved`
-- `partiallyEnriched`: some edges came from stronger sources, but not all of the graph is fully proven
-- `complete`: the graph has enough edge provenance to support graph-aware analysis with confidence
+- `metadataOnly`: the graph is limited to workspace, context, and manifest metadata
+- `partiallyEnriched`: resolved dependency edges were added from `Package.resolved`, but at least one dependency has no direct declaration provenance
+- `complete`: every resolved dependency edge has declaration provenance from a package manifest or Xcode project
 
-`Package.resolved` alone does not provide graph topology. It provides resolved node metadata; topology comes from manifests, workspace structure, or dependency-enrichment sources.
+`Package.resolved` proves which packages were resolved for a context. Direct dependency edges are only marked as declaration-proven when a package manifest or Xcode project declaration can be matched.
 
 ## Requirements
 
@@ -126,7 +127,7 @@ Verify only whether the lockfile is tracked by git:
 swift run spm-dep-tracker check-tracking /path/to/MyApp.xcodeproj
 ```
 
-Graph the dependency topology:
+Graph the workspace dependency view:
 
 ```bash
 swift run spm-dep-tracker graph /path/to/MyApp.xcodeproj --format mermaid
@@ -280,7 +281,7 @@ Exit codes:
 
 ### `graph`
 
-Outputs dependency topology in a graph-friendly format.
+Outputs the workspace graph in a graph-friendly format, including resolved dependency nodes and edge provenance when enrichment is enabled.
 
 ```bash
 spm-dep-tracker graph /path/to/MyApp.xcodeproj --format mermaid

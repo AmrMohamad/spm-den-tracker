@@ -54,5 +54,4 @@ Expose workspace analysis and graph output through the CLI while preserving the 
 ## Integration Notes
 
 - This story depends on the workspace engine and aggregate report types already introduced in the base 0.2.0 contract layer.
-- Graph output here is intentionally adapter-based. When richer core graph helpers land, the CLI renderer should swap from workspace-topology snapshots to the richer graph model without changing the command surface.
-
+- Graph output stays adapter-based at the CLI boundary. The command renders the core workspace graph model, including dependency nodes and edge provenance when enrichment is enabled, without changing the command surface.

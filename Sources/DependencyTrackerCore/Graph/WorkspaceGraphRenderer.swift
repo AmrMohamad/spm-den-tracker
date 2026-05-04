@@ -39,7 +39,7 @@ public struct WorkspaceGraphRenderer: Sendable {
         }
 
         for edge in document.edges {
-            lines.append("  \(edge.from) -->|\(escapeLabel(edge.label))| \(edge.to)")
+            lines.append("  \(edge.from) -->|\(escapeLabel(edgeLabel(edge)))| \(edge.to)")
         }
 
         return lines.joined(separator: "\n")
@@ -53,12 +53,12 @@ public struct WorkspaceGraphRenderer: Sendable {
         lines.append("  root [label=\"\(escapeDOT(document.rootPath))\", shape=box];")
 
         for node in document.nodes where node.id != "root" {
-            let shape = node.kind == "context" ? "ellipse" : "box"
+            let shape = shape(for: node.kind)
             lines.append("  \(node.id) [label=\"\(escapeDOT(node.label))\", shape=\(shape)];")
         }
 
         for edge in document.edges {
-            lines.append("  \(edge.from) -> \(edge.to) [label=\"\(escapeDOT(edge.label))\"];")
+            lines.append("  \(edge.from) -> \(edge.to) [label=\"\(escapeDOT(edgeLabel(edge)))\"];")
         }
 
         lines.append("}")
@@ -84,5 +84,24 @@ public struct WorkspaceGraphRenderer: Sendable {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    /// Includes provenance in text graph labels without changing the graph structure.
+    private func edgeLabel(_ edge: WorkspaceGraphDocument.Edge) -> String {
+        "\(edge.label) [\(edge.provenance.source.rawValue)]"
+    }
+
+    /// Keeps graph shapes predictable for common node types.
+    private func shape(for kind: String) -> String {
+        switch kind {
+        case "workspace":
+            return "box"
+        case "context":
+            return "ellipse"
+        case "dependency":
+            return "component"
+        default:
+            return "box"
+        }
     }
 }

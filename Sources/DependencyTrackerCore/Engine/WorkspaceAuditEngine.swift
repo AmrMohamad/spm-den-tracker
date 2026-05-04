@@ -8,6 +8,9 @@ public struct WorkspaceAuditEngine: Sendable {
     private let trackerEngine: TrackerEngine
     private let manifestIndex: ManifestIndex
     private let resolutionContextDetector: ResolutionContextDetector
+    private let graphBuilder: WorkspaceGraphBuilder
+    private let transitivePinAuditor: TransitivePinAuditor
+    private let blastRadiusAnalyzer: BlastRadiusAnalyzer
 
     /// Creates a workspace engine backed by the supplied single-target engine.
     public init(
@@ -22,6 +25,9 @@ public struct WorkspaceAuditEngine: Sendable {
             ignoreFileName: configuration.ignoreFileName
         )
         self.resolutionContextDetector = ResolutionContextDetector()
+        self.graphBuilder = WorkspaceGraphBuilder()
+        self.transitivePinAuditor = TransitivePinAuditor()
+        self.blastRadiusAnalyzer = BlastRadiusAnalyzer()
     }
 
     /// Builds a workspace report for the supplied root path.
@@ -75,14 +81,25 @@ public struct WorkspaceAuditEngine: Sendable {
             }
         }
 
+        let sortedContextReports = contextReports.sorted { $0.context.displayPath < $1.context.displayPath }
+        let graphSummary = makeGraphSummary(contextReports: sortedContextReports)
+        let generatedAt = Date()
+        let graphFindings = makeGraphFindings(
+            rootPath: rootPath,
+            generatedAt: generatedAt,
+            contexts: sortedContextReports,
+            graphSummary: graphSummary
+        )
+
         return WorkspaceReport(
             rootPath: rootPath,
-            generatedAt: Date(),
+            generatedAt: generatedAt,
             analysisMode: configuration.analysisMode,
             discoveredManifests: discoveredManifests,
-            contexts: contextReports.sorted { $0.context.displayPath < $1.context.displayPath },
-            aggregateFindings: [],
-            partialFailures: aggregatePartialFailures.sorted { $0.subjectPath < $1.subjectPath }
+            contexts: sortedContextReports,
+            aggregateFindings: graphFindings,
+            partialFailures: aggregatePartialFailures.sorted { $0.subjectPath < $1.subjectPath },
+            graphSummary: graphSummary
         )
     }
 
@@ -143,14 +160,24 @@ public struct WorkspaceAuditEngine: Sendable {
             partialFailures: []
         )
 
+        let contextReports = [contextReport]
+        let graphSummary = makeGraphSummary(contextReports: contextReports)
+        let graphFindings = makeGraphFindings(
+            rootPath: path,
+            generatedAt: report.generatedAt,
+            contexts: contextReports,
+            graphSummary: graphSummary
+        )
+
         return WorkspaceReport(
             rootPath: path,
             generatedAt: report.generatedAt,
             analysisMode: analysisMode,
             discoveredManifests: [discovered],
-            contexts: [contextReport],
-            aggregateFindings: [],
-            partialFailures: []
+            contexts: contextReports,
+            aggregateFindings: graphFindings,
+            partialFailures: [],
+            graphSummary: graphSummary
         )
     }
 
@@ -166,5 +193,91 @@ public struct WorkspaceAuditEngine: Sendable {
             return .packageManifest
         }
         return .resolvedFile
+    }
+
+    /// Summarizes how much dependency-edge provenance the current workspace report can prove.
+    private func makeGraphSummary(contextReports: [ResolutionContextReport]) -> WorkspaceGraphSummary {
+        guard configuration.enableGraphEnrichment else {
+            return WorkspaceGraphSummary(
+                certainty: .metadataOnly,
+                message: "Graph enrichment is disabled; output is limited to workspace, context, and manifest metadata."
+            )
+        }
+
+        let dependencies = contextReports.flatMap { context in
+            context.reports.flatMap(\.dependencies)
+        }
+        guard !dependencies.isEmpty else {
+            return WorkspaceGraphSummary(
+                certainty: .metadataOnly,
+                message: "No resolved dependencies were available for dependency-edge graph enrichment."
+            )
+        }
+
+        let dependenciesWithDeclarations = dependencies.filter { $0.declaredRequirement != nil }.count
+        if dependenciesWithDeclarations == dependencies.count {
+            return WorkspaceGraphSummary(
+                certainty: .complete,
+                message: "Every resolved dependency edge has declaration provenance from a manifest or Xcode project."
+            )
+        }
+
+        return WorkspaceGraphSummary(
+            certainty: .partiallyEnriched,
+            message: "\(dependencies.count) \(edgeNoun(count: dependencies.count)) \(wereVerb(count: dependencies.count)) added; \(dependenciesWithDeclarations) \(haveVerb(count: dependenciesWithDeclarations)) direct declaration provenance."
+        )
+    }
+
+    /// Grammar helpers keep graph summaries readable in CLI and AppKit surfaces.
+    private func edgeNoun(count: Int) -> String {
+        count == 1 ? "resolved dependency edge" : "resolved dependency edges"
+    }
+
+    private func wereVerb(count: Int) -> String {
+        count == 1 ? "was" : "were"
+    }
+
+    private func haveVerb(count: Int) -> String {
+        count == 1 ? "has" : "have"
+    }
+
+    /// Runs graph-aware analyzers only when dependency edges were actually produced.
+    private func makeGraphFindings(
+        rootPath: String,
+        generatedAt: Date,
+        contexts: [ResolutionContextReport],
+        graphSummary: WorkspaceGraphSummary
+    ) -> [Finding] {
+        guard graphSummary.certainty != .metadataOnly else { return [] }
+        let report = WorkspaceReport(
+            rootPath: rootPath,
+            generatedAt: generatedAt,
+            analysisMode: configuration.analysisMode,
+            discoveredManifests: [],
+            contexts: contexts,
+            aggregateFindings: [],
+            partialFailures: [],
+            graphSummary: graphSummary
+        )
+        let document = graphBuilder.makeDocument(from: report)
+        return (transitivePinAuditor.analyze(document) + blastRadiusAnalyzer.analyze(document))
+            .sorted { lhs, rhs in
+                if lhs.severity != rhs.severity {
+                    return severityRank(lhs.severity) < severityRank(rhs.severity)
+                }
+                if lhs.category != rhs.category {
+                    return lhs.category.rawValue < rhs.category.rawValue
+                }
+                return lhs.message < rhs.message
+            }
+    }
+
+    /// Local severity ordering for graph findings.
+    private func severityRank(_ severity: Severity) -> Int {
+        switch severity {
+        case .error: return 0
+        case .warning: return 1
+        case .info: return 2
+        }
     }
 }

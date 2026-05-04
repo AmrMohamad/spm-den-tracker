@@ -28,6 +28,12 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private let errorLabel = NSTextField(labelWithString: "")
     /// Summary label shown above the tables.
     private let summaryLabel = NSTextField(labelWithString: "No report loaded.")
+    /// Picker used to focus the tables on one workspace context.
+    private let contextPopup = NSPopUpButton()
+    /// Tab container for table details and Mermaid graph preview.
+    private let tabView = NSTabView()
+    /// Read-only text view that previews Mermaid graph output.
+    private let graphTextView = NSTextView()
     /// Table that renders report findings.
     private let findingsTableView = FindingsTableView()
     /// Table that renders dependency rows.
@@ -111,6 +117,18 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         summaryLabel.font = .systemFont(ofSize: 12, weight: .medium)
         summaryLabel.textColor = .secondaryLabelColor
 
+        let contextLabel = NSTextField(labelWithString: "Context")
+        contextLabel.font = .boldSystemFont(ofSize: NSFont.smallSystemFontSize)
+        contextPopup.target = self
+        contextPopup.action = #selector(contextSelectionChanged)
+        contextPopup.isEnabled = false
+        contextPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let contextRow = NSStackView(views: [contextLabel, contextPopup])
+        contextRow.orientation = .horizontal
+        contextRow.alignment = .centerY
+        contextRow.spacing = 8
+        contextLabel.setContentHuggingPriority(.required, for: .horizontal)
+
         findingsTableView.translatesAutoresizingMaskIntoConstraints = false
         dependenciesTableView.translatesAutoresizingMaskIntoConstraints = false
         findingsTableView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
@@ -123,6 +141,43 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         findingsSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         dependenciesSection.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
+        let detailsStack = NSStackView(views: [summaryLabel, contextRow, findingsSection, dependenciesSection])
+        detailsStack.orientation = .vertical
+        detailsStack.alignment = .width
+        detailsStack.distribution = .fill
+        detailsStack.spacing = 10
+
+        graphTextView.isEditable = false
+        graphTextView.isSelectable = true
+        graphTextView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        graphTextView.string = ""
+        graphTextView.textContainerInset = NSSize(width: 8, height: 8)
+        let graphScrollView = NSScrollView()
+        graphScrollView.borderType = .bezelBorder
+        graphScrollView.hasVerticalScroller = true
+        graphScrollView.hasHorizontalScroller = true
+        graphScrollView.autohidesScrollers = false
+        graphScrollView.documentView = graphTextView
+        graphTextView.minSize = NSSize(width: 0, height: 0)
+        graphTextView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        graphTextView.isVerticallyResizable = true
+        graphTextView.isHorizontallyResizable = true
+        graphTextView.autoresizingMask = [.width, .height]
+        graphTextView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        graphTextView.textContainer?.widthTracksTextView = false
+
+        tabView.translatesAutoresizingMaskIntoConstraints = false
+        tabView.setContentHuggingPriority(.defaultLow, for: .vertical)
+        tabView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        let detailsItem = NSTabViewItem(identifier: "details")
+        detailsItem.label = "Details"
+        detailsItem.view = detailsStack
+        let graphItem = NSTabViewItem(identifier: "graph")
+        graphItem.label = "Graph"
+        graphItem.view = graphScrollView
+        tabView.addTabViewItem(detailsItem)
+        tabView.addTabViewItem(graphItem)
+
         let exportRow = NSStackView(views: [markdownButton, jsonButton, graphButton])
         exportRow.orientation = .horizontal
         exportRow.alignment = .centerY
@@ -130,9 +185,7 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
 
         rootStack.addArrangedSubview(pathRow)
         rootStack.addArrangedSubview(errorLabel)
-        rootStack.addArrangedSubview(summaryLabel)
-        rootStack.addArrangedSubview(findingsSection)
-        rootStack.addArrangedSubview(dependenciesSection)
+        rootStack.addArrangedSubview(tabView)
         rootStack.addArrangedSubview(exportRow)
 
         contentView.addSubview(rootStack)
@@ -144,9 +197,8 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
             rootStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
             pathRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             errorLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            summaryLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            findingsSection.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            dependenciesSection.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            tabView.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            tabView.heightAnchor.constraint(greaterThanOrEqualToConstant: 520),
             exportRow.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
     }
@@ -177,6 +229,27 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] text in
                 self?.summaryLabel.stringValue = text
+            }
+            .store(in: &cancellables)
+
+        viewModel.$contextSummaries
+            .receive(on: RunLoop.main)
+            .sink { [weak self] summaries in
+                self?.reloadContextMenu(summaries: summaries)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$selectedContextDisplayPath
+            .receive(on: RunLoop.main)
+            .sink { [weak self] selected in
+                self?.selectContextMenuItem(displayPath: selected)
+            }
+            .store(in: &cancellables)
+
+        viewModel.$graphPreviewText
+            .receive(on: RunLoop.main)
+            .sink { [weak self] text in
+                self?.graphTextView.string = text
             }
             .store(in: &cancellables)
 
@@ -222,6 +295,28 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
         return stack
     }
 
+    /// Rebuilds the context picker from the latest workspace report.
+    private func reloadContextMenu(summaries: [WorkspaceContextSummary]) {
+        contextPopup.removeAllItems()
+        contextPopup.addItem(withTitle: "All contexts")
+        for summary in summaries {
+            contextPopup.addItem(withTitle: summary.menuTitle)
+            contextPopup.lastItem?.representedObject = summary.displayPath
+        }
+        contextPopup.isEnabled = !summaries.isEmpty
+    }
+
+    /// Keeps the picker aligned when the view model resets selection.
+    private func selectContextMenuItem(displayPath: String?) {
+        guard let displayPath else {
+            contextPopup.selectItem(at: 0)
+            return
+        }
+        if let item = contextPopup.itemArray.first(where: { $0.representedObject as? String == displayPath }) {
+            contextPopup.select(item)
+        }
+    }
+
     @objc
     /// Prompts the user for a project path and pushes the selection into the view model.
     private func browseTapped() {
@@ -245,6 +340,12 @@ final class MainWindowController: NSWindowController, NSOpenSavePanelDelegate {
     private func analyzeTapped() {
         viewModel.projectPath = pathField.stringValue
         viewModel.analyze()
+    }
+
+    @objc
+    /// Applies the selected context filter to the findings and dependency tables.
+    private func contextSelectionChanged() {
+        viewModel.selectContext(displayPath: contextPopup.selectedItem?.representedObject as? String)
     }
 
     @objc
