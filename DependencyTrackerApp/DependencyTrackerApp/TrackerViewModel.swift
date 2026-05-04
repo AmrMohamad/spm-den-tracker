@@ -29,17 +29,29 @@ enum ProjectSelectionValidator {
     }
 }
 
+/// Finding row plus the workspace scope that produced it.
+struct ScopedFindingRow: Equatable {
+    let scope: String
+    let finding: Finding
+}
+
+/// Dependency row plus the workspace scope that produced it.
+struct ScopedDependencyRow: Equatable {
+    let scope: String
+    let dependency: DependencyAnalysis
+}
+
 @MainActor
 /// Main-window view model that coordinates user input, analysis state, and export actions.
 final class TrackerViewModel: ObservableObject {
     /// The project path currently shown in the text field.
     @Published var projectPath: String = ""
     /// The most recent successful report, used to power exports and UI tables.
-    @Published private(set) var report: DependencyReport?
+    @Published private(set) var report: WorkspaceReport?
     /// The finding rows currently displayed in the UI.
-    @Published private(set) var findings: [Finding] = []
+    @Published private(set) var findingRows: [ScopedFindingRow] = []
     /// The dependency rows currently displayed in the UI.
-    @Published private(set) var dependencies: [DependencyAnalysis] = []
+    @Published private(set) var dependencyRows: [ScopedDependencyRow] = []
     /// Indicates whether an analysis is actively running.
     @Published private(set) var isAnalyzing = false
     /// The latest user-visible error, if the last run failed validation or execution.
@@ -53,6 +65,8 @@ final class TrackerViewModel: ObservableObject {
     private let markdownFormatter = MarkdownReporter()
     /// Formatter reused for JSON export.
     private let jsonFormatter = JSONReporter()
+    /// Formatter reused for graph export.
+    private let graphRenderer = WorkspaceGraphRenderer()
     /// The currently running analysis task so it can be cancelled before a new run starts.
     private var analysisTask: Task<Void, Never>?
     /// Identifies the latest requested analysis so stale task completions cannot overwrite newer UI state.
@@ -84,8 +98,8 @@ final class TrackerViewModel: ObservableObject {
             isAnalyzing = false
             errorMessage = "Select an Xcode project, project directory, or Package.resolved file."
             report = nil
-            findings = []
-            dependencies = []
+            findingRows = []
+            dependencyRows = []
             summaryText = "No report loaded."
             return
         }
@@ -101,8 +115,8 @@ final class TrackerViewModel: ObservableObject {
                 guard let self, self.activeAnalysisID == analysisID else { return }
                 self.activeAnalysisID = nil
                 self.report = report
-                self.findings = report.findings
-                self.dependencies = report.dependencies
+                self.findingRows = Self.scopedFindings(from: report)
+                self.dependencyRows = Self.scopedDependencies(from: report)
                 self.summaryText = Self.makeSummaryText(report: report)
                 self.errorMessage = nil
                 self.isAnalyzing = false
@@ -114,8 +128,8 @@ final class TrackerViewModel: ObservableObject {
                 guard let self, self.activeAnalysisID == analysisID else { return }
                 self.activeAnalysisID = nil
                 self.report = nil
-                self.findings = []
-                self.dependencies = []
+                self.findingRows = []
+                self.dependencyRows = []
                 self.summaryText = "No report loaded."
                 self.errorMessage = error.localizedDescription
                 self.isAnalyzing = false
@@ -140,11 +154,44 @@ final class TrackerViewModel: ObservableObject {
         return jsonFormatter.format(report)
     }
 
+    /// Returns the current workspace graph as Mermaid text, or `nil` when no report is loaded.
+    func exportGraphMermaid() -> String? {
+        guard let report else { return nil }
+        return graphRenderer.render(report, format: .mermaid)
+    }
+
     /// Builds the summary string shown above the split tables.
-    static func makeSummaryText(report: DependencyReport) -> String {
-        let dependencyCount = report.dependencies.count
-        let outdatedCount = report.dependencies.filter { $0.outdated?.isOutdated == true }.count
-        let actionableCount = report.findings.filter(\.isActionable).count
-        return "\(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable"
+    static func makeSummaryText(report: WorkspaceReport) -> String {
+        let dependencies = scopedDependencies(from: report).map(\.dependency)
+        let findings = scopedFindings(from: report).map(\.finding)
+        let dependencyCount = dependencies.count
+        let outdatedCount = dependencies.filter { $0.outdated?.isOutdated == true }.count
+        let actionableCount = findings.filter(\.isActionable).count
+        let partialFailureCount = report.partialFailures.count + report.contexts.flatMap(\.partialFailures).count
+        return "\(report.contexts.count) contexts · \(report.discoveredManifests.count) manifests · \(dependencyCount) deps · \(outdatedCount) outdated · \(actionableCount) actionable · \(partialFailureCount) partial failures"
+    }
+
+    /// Flattens workspace and context findings while preserving their source scope.
+    static func scopedFindings(from report: WorkspaceReport) -> [ScopedFindingRow] {
+        let aggregate = report.aggregateFindings.map { finding in
+            ScopedFindingRow(scope: report.rootPath, finding: finding)
+        }
+        let contextual = report.contexts.flatMap { context in
+            context.findings.map { finding in
+                ScopedFindingRow(scope: context.context.displayPath, finding: finding)
+            }
+        }
+        return aggregate + contextual
+    }
+
+    /// Flattens all dependency rows from all context reports while preserving their source scope.
+    static func scopedDependencies(from report: WorkspaceReport) -> [ScopedDependencyRow] {
+        report.contexts.flatMap { context in
+            context.reports.flatMap { dependencyReport in
+                dependencyReport.dependencies.map { dependency in
+                    ScopedDependencyRow(scope: context.context.displayPath, dependency: dependency)
+                }
+            }
+        }
     }
 }
